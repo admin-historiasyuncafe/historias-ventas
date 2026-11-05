@@ -368,7 +368,7 @@ const AUTO_LOCK_MS=120000; // se bloquea si la app estuvo fuera de pantalla más
 const store={get:k=>{try{return localStorage.getItem(k);}catch(e){return null;}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}},del:k=>{try{localStorage.removeItem(k);}catch(e){}}};
 const state={view:'dia',ch:'all',day:null,month:null,sort:'q',maxItems:8,data:null,pin:'',
   rep:{mode:'mes',month:null,from:null,to:null},imports:null,uploadMsgs:[],busy:false,
-  sync:{busy:false,last:0,err:''},olderLoaded:false,loadingOlder:false};
+  sync:{busy:false,last:0,err:''},olderLoaded:false,loadingOlder:false,olderGen:0};
 const useCl=()=>state.ch!=='dd';
 const useDd=()=>state.ch!=='cl';
 
@@ -880,7 +880,7 @@ const actions={
     const f=$('hFrom').value,h=$('hTo').value;
     if(!f||!h){toast('Elige las dos fechas.');return;}
     t.disabled=true;t.textContent='Trayendo…';
-    try{const r=await call('syncRango',state.pin,f,h);await loadData(true);toast('Historial listo: '+r.dias+' días');}
+    try{const r=await call('syncRango',state.pin,f,h);reloadOlder();await loadData(true);toast('Historial listo: '+r.dias+' días nuevos');}
     catch(e){toast(errMsg(e));}
     if(state.view==='ajustes')renderAjustes();
   },
@@ -959,17 +959,22 @@ function mergeRecent(nd){
 async function loadOlder(){
   if(state.olderLoaded||state.loadingOlder||!state.pin)return;
   state.loadingOlder=true;
-  const pin=state.pin;
+  const pin=state.pin,gen=state.olderGen;
+  let again=false;
   try{
     const od=await call('getData',pin,'older');
-    if(state.data&&state.pin===pin){
+    if(gen!==state.olderGen)again=true;   // llegó historial nuevo mientras esto cargaba: hay que pedirlo otra vez
+    else if(state.data&&state.pin===pin){
       const D=state.data;
       D.clDias=od.clDias.concat(D.clDias);D.clItems=od.clItems.concat(D.clItems);D.clEmp=od.clEmp.concat(D.clEmp);
       state.olderLoaded=true;refresh();
     }
   }catch(e){/* se reintenta en la próxima actualización */}
   finally{state.loadingOlder=false;}
+  if(again)loadOlder();
 }
+// después de traer meses viejos de Clover hay que volver a leer el historial antiguo
+function reloadOlder(){state.olderLoaded=false;state.olderGen++;}
 async function loadData(silent){
   const btn=$('btnReload');if(!silent)btn.classList.add('spin');
   try{
@@ -996,7 +1001,7 @@ function showLock(msg){
 }
 // Borra el PIN y los datos de la memoria y vuelve a pedir el PIN
 function lockApp(msg){
-  state.pin='';state.data=null;state.imports=null;state.uploadMsgs=[];state.olderLoaded=false;state.loadingOlder=false;
+  state.pin='';state.data=null;state.imports=null;state.uploadMsgs=[];state.olderLoaded=false;state.loadingOlder=false;state.olderGen++;
   state.sync={busy:false,last:0,err:''};
   $('main').innerHTML='';
   showLock(msg||'');
@@ -1069,7 +1074,15 @@ const demo=(function(){
     },scope==='older'?1500:400)),
     syncNow:()=>({ok:true}),
     syncHoy:(pin)=>new Promise((r,j)=>setTimeout(()=>{if(pin!=='123456')j(new Error('PIN_INCORRECTO'));else r(Object.assign(pack('recent'),{lastSync:new Date().toISOString()}));},1800)),
-    syncRango:(p,f,t)=>({ok:true,dias:5}),
+    syncRango:(p,f,t)=>{
+      let n=0;
+      for(let d=f;d<=t;d=add(d,1)){
+        if(data.clDias.some(r=>r[0]===d))continue;
+        data.clDias.push([d,40,800]);data.clItems.push([d,'Latte 12oz',20,80]);data.clEmp.push([d,'Vendedora A',40,800]);n++;
+      }
+      [data.clDias,data.clItems,data.clEmp].forEach(a=>a.sort((x,y)=>x[0]<y[0]?-1:x[0]>y[0]?1:0));
+      return {ok:true,dias:n};
+    },
     importarDoorDash:()=>({ok:false,msg:'No disponible en la demostración.'}),
     listarImportaciones:()=>imports,
     borrarImportacion:()=>({ok:true}),
