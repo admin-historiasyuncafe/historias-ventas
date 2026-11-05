@@ -86,6 +86,9 @@ h1,h2,h3,p{margin:0}
 :root[data-theme="dark"] .syncline.err{color:#FF9B8B}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .syncline.err{color:#FF9B8B}}
 .dotspin{width:12px;height:12px;border-radius:50%;border:2px solid var(--track);border-top-color:var(--teal);animation:spin .8s linear infinite}
+.loading .track{animation:pulse 1.3s ease-in-out infinite}
+.skel{min-height:84px;animation:pulse 1.3s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.45}}
 .swap{animation:swapin .22s ease both}
 @keyframes swapin{from{opacity:0}to{opacity:1}}
 
@@ -407,7 +410,7 @@ const AUTO_LOCK_MS=120000; // se bloquea si la app estuvo fuera de pantalla más
 const store={get:k=>{try{return localStorage.getItem(k);}catch(e){return null;}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}},del:k=>{try{localStorage.removeItem(k);}catch(e){}}};
 const state={view:'dia',ch:'all',day:null,month:null,sort:'q',maxItems:8,data:null,pin:'',
   rep:{mode:'mes',month:null,from:null,to:null},imports:null,uploadMsgs:[],busy:false,
-  sync:{busy:false,last:0,err:''}};
+  sync:{busy:false,last:0,err:''},olderLoaded:false,loadingOlder:false};
 const useCl=()=>state.ch!=='dd';
 const useDd=()=>state.ch!=='cl';
 
@@ -584,7 +587,7 @@ async function syncToday(force){
   try{
     const nd=await call('syncHoy',state.pin);
     if(nd.syncError)state.sync.err=nd.syncError;
-    state.data=nd;initState();
+    state.data=mergeRecent(nd);initState();
   }catch(e){
     const m=errMsg(e);
     if(/PIN_/.test(m)){lockApp(pinMsg(m));}
@@ -639,15 +642,15 @@ function updateDia(){
   const ord=chOrders(a),tot=cl+dd;
   const partial=useDd()&&a.ddFromItems;
   $('dstats').innerHTML=`<div><span class="k">Órdenes${partial?' (solo Clover)':''}</span><span class="v">${ord}</span></div><div><span class="k">Ticket promedio</span><span class="v">${ord&&!partial?money(tot/ord):'—'}</span></div>`;
-  const noRow=D.cloverOk&&useCl()&&d<=D.today&&!a.synced[d];
-  $('dnotes').innerHTML=notesFor(a,'este día').map(t=>`<p class="note">${esc(t)}</p>`).join('')+
+  const noRow=D.cloverOk&&useCl()&&d<=D.today&&!a.synced[d]&&!olderPending(d);
+  $('dnotes').innerHTML=(olderPending(d)?'<p class="note">Cargando meses anteriores…</p>':'')+notesFor(a,'este día').map(t=>`<p class="note">${esc(t)}</p>`).join('')+
     (noRow?'<p class="note">Clover no tiene datos guardados de este día. Ve a Ajustes y toca Actualizar Clover ahora, o usa Traer historial.</p>':'')+
     (!D.cloverOk&&!D.clDias.length&&useCl()?'<p class="note">Clover todavía no está conectado. Ve a Ajustes para conectarlo.</p>':'');
   // semana
   const wk=[];for(let i=6;i>=0;i--)wk.push(add(d,-i));
   const wa=agg(wk[0],d);
   const mx=Math.max(...wk.map(k=>(useCl()?wa.days[k].cl:0)+(useDd()?wa.days[k].dd:0)),1);
-  $('week').innerHTML=chartCols(wa.days,wk,mx).map(c=>{const ns=D.cloverOk&&useCl()&&c.k<=D.today&&!wa.synced[c.k];return `<button class="wcol" data-act="openDay" data-d="${c.k}" aria-label="${labelDay(c.k)}: ${ns?'sin datos de Clover':money(c.t)}"${c.k===d?' aria-current="true"':''}>
+  $('week').innerHTML=chartCols(wa.days,wk,mx).map(c=>{const ns=D.cloverOk&&useCl()&&c.k<=D.today&&!wa.synced[c.k]&&!olderPending(c.k);return `<button class="wcol" data-act="openDay" data-d="${c.k}" aria-label="${labelDay(c.k)}: ${ns?'sin datos de Clover':money(c.t)}"${c.k===d?' aria-current="true"':''}>
     <span class="amt">${ns?'sin dato':c.t>0?money0(c.t):'—'}</span><span class="stack">${c.c>0?`<i class="cl" data-h="${c.hc.toFixed(2)}%"></i>`:''}${c.d>0?`<i class="dd" data-h="${c.hd.toFixed(2)}%"></i>`:''}</span><span class="dlab">${DIAS3[parse(c.k).getUTCDay()]} ${parse(c.k).getUTCDate()}</span></button>`;}).join('');
   // platos
   const rows=itemRows(a);
@@ -722,7 +725,8 @@ function updateMes(){
   const pTo=cur?(()=>{const dn=Number(D.today.slice(8));const le=monthEnd(pm);const cand=pm+'-'+String(dn).padStart(2,'0');return cand>le?le:cand;})():monthEnd(pm);
   const pa=agg(pFrom,pTo),pt=chTotal(pa);
   const cmp=$('cmp');
-  if(pt>0&&tot>0){const pc=Math.round((tot-pt)/pt*100);cmp.innerHTML=`<b>${Math.abs(pc)}% ${pc>=0?'más':'menos'}</b> que ${monthName(pm)}${cur?' al mismo día':''} (${money0(pt)})`;}
+  if(olderPending(pFrom)){cmp.textContent='Cargando meses anteriores…';}
+  else if(pt>0&&tot>0){const pc=Math.round((tot-pt)/pt*100);cmp.innerHTML=`<b>${Math.abs(pc)}% ${pc>=0?'más':'menos'}</b> que ${monthName(pm)}${cur?' al mismo día':''} (${money0(pt)})`;}
   else if(pt>0){cmp.innerHTML=`${monthName(pm)}${cur?' al mismo día':''}: ${money0(pt)}`;}
   else cmp.textContent=`Sin datos de ${monthName(pm)} para comparar.`;
   // estadísticas
@@ -735,14 +739,14 @@ function updateMes(){
     <div><span class="k">Promedio por día con ventas</span><span class="v">${open.length?money(dayTot/open.length):'—'}</span></div>
     <div><span class="k">Órdenes${partial?' (solo Clover)':''}</span><span class="v">${ord}</span></div>
     <div><span class="k">Ticket promedio</span><span class="v">${ord&&!partial?money(tot/ord):'—'}</span></div>`;
-  $('mnotes').innerHTML=notesFor(a,'este mes').map(t=>`<p class="note">${esc(t)}</p>`).join('');
+  $('mnotes').innerHTML=(olderPending(from)?'<p class="note">Cargando meses anteriores…</p>':'')+notesFor(a,'este mes').map(t=>`<p class="note">${esc(t)}</p>`).join('');
   // barras por día
   const mx=Math.max(...days.map(tv),1);
   const bars=$('mbars');bars.style.gridTemplateColumns=`repeat(${days.length},1fr)`;
   bars.innerHTML=chartCols(a.days,days,mx).map(c=>{
     const n=parse(c.k).getUTCDate();
     const lab=(n===1||n%5===0)?n:'';
-    const fut=c.k>D.today,ns=D.cloverOk&&useCl()&&!fut&&!a.synced[c.k];
+    const fut=c.k>D.today,ns=D.cloverOk&&useCl()&&!fut&&!a.synced[c.k]&&!olderPending(c.k);
     return `<button class="bcol" data-act="openDay" data-d="${c.k}" title="${labelDay(c.k)}: ${ns?'sin datos de Clover':money(c.t)}" aria-label="${labelDay(c.k)}: ${ns?'sin datos de Clover':money(c.t)}"${c.k===D.today?' aria-current="true"':''}>
       ${c.t>0?`<span class="stack">${c.c>0?`<i class="cl" data-h="${c.hc.toFixed(2)}%"></i>`:''}${c.d>0?`<i class="dd" data-h="${c.hd.toFixed(2)}%"></i>`:''}</span>`:`<span class="zero${ns?' ns':''}"${fut?' style="opacity:.4"':''}></span>`}<span class="bl">${lab}</span></button>`;
   }).join('');
@@ -883,7 +887,12 @@ function setView(v){
   refresh();
 }
 function refresh(){
-  if(!state.data){$('main').innerHTML='<p class="empty" style="text-align:center;padding:60px 0">Cargando ventas…</p>';return;}
+  if(!state.data){
+    $('main').innerHTML=`<section class="swap loading"><div class="seal-wrap">${sealHTML()}<div class="legend"><div class="lg skel"></div><div class="lg skel"></div></div></div>
+      <div class="cols" style="margin-top:18px"><div class="col-a"><section class="block skel"></section></div><div class="col-b"><section class="block skel"></section></div></div></section>`;
+    $('sealTotal').innerHTML='';$('sealLabel').textContent='';$('sealCap').textContent='Cargando…';
+    return;
+  }
   if(state.view==='dia'){if(!$('v-dia'))mountDia();updateDia();}
   else if(state.view==='mes'){if(!$('v-mes'))mountMes();updateMes();}
   else if(state.view==='reporte')renderReporte();
@@ -1013,13 +1022,38 @@ function initState(){
   if(!state.month)state.month=monthKey(D.today);
   buildMatch();
 }
+const olderPending=d=>!state.olderLoaded&&!!state.data&&d<state.data.recentFrom;
+// conserva el historial antiguo ya cargado cuando llegan datos recientes nuevos
+function mergeRecent(nd){
+  const old=state.data;
+  if(old&&state.olderLoaded){
+    ['clDias','clItems','clEmp'].forEach(k=>{nd[k]=old[k].filter(r=>r[0]<nd.recentFrom).concat(nd[k]);});
+  }
+  return nd;
+}
+// el resto del historial llega en segundo plano, después de que la pantalla ya abrió
+async function loadOlder(){
+  if(state.olderLoaded||state.loadingOlder||!state.pin)return;
+  state.loadingOlder=true;
+  const pin=state.pin;
+  try{
+    const od=await call('getData',pin,'older');
+    if(state.data&&state.pin===pin){
+      const D=state.data;
+      D.clDias=od.clDias.concat(D.clDias);D.clItems=od.clItems.concat(D.clItems);D.clEmp=od.clEmp.concat(D.clEmp);
+      state.olderLoaded=true;buildMatch();refresh();
+    }
+  }catch(e){/* se reintenta en la próxima actualización */}
+  finally{state.loadingOlder=false;}
+}
 async function loadData(silent){
   const btn=$('btnReload');if(!silent)btn.classList.add('spin');
   try{
-    const D=await call('getData',state.pin);
-    state.data=D;initState();
+    const D=await call('getData',state.pin,'recent');
+    state.data=mergeRecent(D);initState();
     $('lock').hidden=true;
     refresh();
+    loadOlder();
   }catch(e){
     const m=errMsg(e);
     if(/PIN_/.test(m))lockApp(pinMsg(m));
@@ -1038,7 +1072,7 @@ function showLock(msg){
 }
 // Borra el PIN y los datos de la memoria y vuelve a pedir el PIN
 function lockApp(msg){
-  state.pin='';state.data=null;state.imports=null;state.uploadMsgs=[];
+  state.pin='';state.data=null;state.imports=null;state.uploadMsgs=[];state.olderLoaded=false;state.loadingOlder=false;
   state.sync={busy:false,last:0,err:''};
   $('main').innerHTML='';
   showLock(msg||'');
@@ -1047,6 +1081,7 @@ function tryPin(){
   const v=$('pinInput').value.replace(/\D/g,'');
   if(v.length!==6){$('pinErr').textContent='El PIN tiene 6 dígitos.';return;}
   state.pin=v;$('pinErr').textContent='';$('pinInput').value='';
+  $('lock').hidden=true;refresh();   // abre la pantalla al instante; si el PIN falla, vuelve a pedirlo
   loadData(false);
 }
 $('pinGo').addEventListener('click',tryPin);
@@ -1094,11 +1129,22 @@ const demo=(function(){
   if(location.search.indexOf('nosales')>=0)ddVentas.length=0;
   if(location.search.indexOf('big')>=0)clDias.forEach(r=>{r[2]=+(r[2]*9).toFixed(2);});
   const data={today,cloverOk:true,lastSync:new Date().toISOString(),clDias,clItems,clEmp,ddVentas,ddItems,equiv};
+  const recentFrom=(()=>{let y=+today.slice(0,4),m=+today.slice(5,7)-1;if(m<1){m=12;y--;}return y+'-'+String(m).padStart(2,'0')+'-01';})();
+  const pack=scope=>{
+    const c=JSON.parse(JSON.stringify(data));
+    const keep=scope==='older'?(r=>r[0]<recentFrom):(r=>r[0]>=recentFrom);
+    c.clDias=c.clDias.filter(keep);c.clItems=c.clItems.filter(keep);c.clEmp=c.clEmp.filter(keep);c.recentFrom=recentFrom;
+    if(scope==='older')return {scope:'older',recentFrom,clDias:c.clDias,clItems:c.clItems,clEmp:c.clEmp};
+    return c;
+  };
   return {
     needsPin:()=>true,
-    getData:(pin)=>{if(pin!=='123456')throw new Error('PIN_INCORRECTO');return JSON.parse(JSON.stringify(data));},
+    getData:(pin,scope)=>new Promise((res,rej)=>setTimeout(()=>{
+      if(pin!=='123456'){rej(new Error('PIN_INCORRECTO'));return;}
+      res(pack(scope==='older'?'older':'recent'));
+    },scope==='older'?1500:400)),
     syncNow:()=>({ok:true}),
-    syncHoy:(pin)=>new Promise((r,j)=>setTimeout(()=>{if(pin!=='123456')j(new Error('PIN_INCORRECTO'));else r(Object.assign(JSON.parse(JSON.stringify(data)),{lastSync:new Date().toISOString()}));},1800)),
+    syncHoy:(pin)=>new Promise((r,j)=>setTimeout(()=>{if(pin!=='123456')j(new Error('PIN_INCORRECTO'));else r(Object.assign(pack('recent'),{lastSync:new Date().toISOString()}));},1800)),
     syncRango:(p,f,t)=>({ok:true,dias:5}),
     importarDoorDash:()=>({ok:false,msg:'No disponible en la demostración.'}),
     listarImportaciones:()=>imports,
@@ -1118,6 +1164,7 @@ async function boot(){
   document.querySelectorAll('.nav button').forEach(b=>{if(b.dataset.view==='dia')b.setAttribute('aria-current','page');});
   state.view='dia';
   lockApp('');
+  call('needsPin').catch(()=>{});   // despierta el servidor mientras se escribe el PIN
   setInterval(()=>{
     if(document.hidden||!state.pin)return;
     if(state.view==='dia'||state.view==='mes')syncToday(true);else if(state.view!=='ajustes')loadData(true);
