@@ -8,7 +8,7 @@
 (function () {
   'use strict';
 
-  var API_URL = 'PEGA_AQUI_LA_URL_QUE_TERMINA_EN_/exec';
+  var API_URL = 'https://script.google.com/macros/s/AKfycbzto1ZYZLPVXCmQuWVPebdiRh_xokyVzUK0-nmCsQ6Gsx7a2bGYFDJhPBexhpW1Wy9msA/exec';
 
   // Si la página corre dentro de Apps Script, no hace falta el puente.
   if (window.google && window.google.script && window.google.script.run) return;
