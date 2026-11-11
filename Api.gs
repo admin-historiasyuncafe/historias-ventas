@@ -18,7 +18,8 @@ function API_FUNCIONES_() {
     listarImportaciones: listarImportaciones,
     borrarImportacion: borrarImportacion,
     guardarEquiv: guardarEquiv,
-    guardarEquivVarios: guardarEquivVarios
+    guardarEquivVarios: guardarEquivVarios,
+    guardarMetas: guardarMetas
   };
 }
 

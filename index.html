@@ -17,7 +17,7 @@
   --teal:#008080; --gold:#A57F50; --sage:#5C857D; --mint:#9FCFCA;
   --cl:#008080; --dd:#A57F50; --cl-ink:#006666; --dd-ink:#7C5B2C;
   --track:rgba(36,39,42,.09); --glass:rgba(237,237,237,.82); --focus:#008080;
-  --glow:rgba(0,128,128,.20);
+  --glow:rgba(0,128,128,.20); --red:#B3402F;
   --shadow:0 1px 0 rgba(255,255,255,.8) inset,0 14px 34px -18px rgba(36,39,42,.35);
   color-scheme:light;
 }
@@ -25,7 +25,7 @@
   :root:not([data-theme="light"]){
     --bg:#181B1D; --surface:#24272A; --surface2:#2C3033; --ink:#EDEDED; --muted:#A8B3B1; --line:rgba(237,237,237,.13);
     --cl:#1FA9A4; --dd:#C9A06B; --cl-ink:#86D6D0; --dd-ink:#DDBB8C;
-    --track:rgba(237,237,237,.11); --glass:rgba(24,27,29,.82); --focus:#9FCFCA; --glow:rgba(31,169,164,.26);
+    --track:rgba(237,237,237,.11); --glass:rgba(24,27,29,.82); --focus:#9FCFCA; --glow:rgba(31,169,164,.26); --red:#FF8A78; --red:#FF8A78;
     --shadow:0 1px 0 rgba(255,255,255,.05) inset,0 14px 34px -18px rgba(0,0,0,.7);
     color-scheme:dark;
   }
@@ -203,6 +203,28 @@ h1,h2,h3,p{margin:0}
 .list .nm{overflow-wrap:anywhere;font-weight:700}
 .list .sub{display:block;color:var(--muted);font-size:12.5px;font-weight:600}
 .res{font-size:14px;padding:8px 0}
+.goal{width:100%;max-width:420px;margin:0 auto;padding:16px;border-radius:16px;background:var(--surface);border:1px solid var(--line)}
+.goal-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.goal-top .k{font-size:13.5px;font-weight:700;color:var(--muted)}
+.goal-top .v{font-size:19px;font-weight:800}
+.goalbar{height:12px;border-radius:7px;background:var(--track);overflow:hidden}
+.goalbar i{display:block;height:100%;width:0;background:var(--cl);border-radius:7px;transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.goal .sold{font-size:13.5px;color:var(--muted);font-weight:600;margin-top:8px}
+.goal-miss{color:var(--red);font-size:20px;font-weight:800;margin-top:6px}
+.goal-ok{color:var(--cl-ink);font-size:20px;font-weight:800;margin-top:6px}
+.goal .hint{margin-top:4px}
+.gsum{font-size:15px;margin-bottom:4px}
+.gt{width:100%;border-collapse:collapse;font-size:14px;margin-top:12px}
+.gt th{text-align:left;font-size:12.5px;color:var(--muted);font-weight:700;padding:6px 6px;border-bottom:1px solid var(--line)}
+.gt td{padding:9px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+.gt .n{text-align:right}
+.gt tr[data-act]{cursor:pointer}
+.gt tr[data-act]:hover td{background:var(--surface2)}
+.neg{color:var(--red);font-weight:700}
+.pos{color:var(--cl-ink);font-weight:700}
+.metas{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:12px}
+.metas .field{min-width:0}
+.metas .field input{width:100%;min-width:0}
 .res.ok{color:var(--cl-ink)} .res.err{color:#B3402F}
 :root[data-theme="dark"] .res.err{color:#FF9B8B}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .res.err{color:#FF9B8B}}
@@ -519,6 +541,58 @@ function chartCols(days,keys,max){
   });
 }
 
+/* ═════════ Metas de venta ═════════ */
+// getUTCDay: 0 domingo, 1 lunes … 6 sábado
+const DEF_METAS=[{desde:'2000-01-01',m:{0:6500,1:0,2:2500,3:2500,4:2500,5:3500,6:5500}}];
+// cada cambio de metas se guarda con su fecha, así el historial conserva la meta que tenía cada día
+function metaDe(d){
+  const L=(state.data&&state.data.metas&&state.data.metas.length)?state.data.metas:DEF_METAS;
+  let cur=L[0];L.forEach(x=>{if(x.desde<=d)cur=x;});
+  return Number((cur.m||{})[parse(d).getUTCDay()])||0;
+}
+function metasActuales(){const t=state.data?state.data.today:'9999-12-31';const L=(state.data&&state.data.metas&&state.data.metas.length)?state.data.metas:DEF_METAS;let cur=L[0];L.forEach(x=>{if(x.desde<=t)cur=x;});return cur.m||{};}
+function ddCovered(d){
+  return (state.data.ddVentas||[]).some(r=>(r[5]||r[0])<=d&&d<=(r[6]||r[1]));
+}
+// la meta es del negocio completo: Clover + DoorDash, sin importar el canal elegido arriba
+function goalHTML(d,a){
+  const D=state.data,meta=metaDe(d);
+  if(d>D.today||olderPending(d))return '';
+  if(!meta)return `<div class="goal"><div class="goal-top"><span class="k">Meta del día</span><span class="v">—</span></div><p class="hint">Los ${DIAS[parse(d).getUTCDay()]} no tienen meta.</p></div>`;
+  const tot=a.cl.b+a.dd.b,diff=tot-meta,pct=Math.min(100,tot/meta*100),hoy=d===D.today;
+  return `<div class="goal"><div class="goal-top"><span class="k">Meta del día</span><span class="v">${money0(meta)}</span></div>
+    <div class="goalbar" role="progressbar" aria-label="Avance de la meta" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><i data-w="${pct.toFixed(1)}%"></i></div>
+    <p class="sold">${money(tot)} vendido · ${Math.round(tot/meta*100)}% de la meta</p>
+    ${diff>=0?`<p class="goal-ok">Meta lograda${diff>0?' · '+money(diff)+' por encima':''}</p>`:`<p class="goal-miss">${hoy?'Faltan':'Faltaron'} ${money(-diff)}</p>`}
+    <p class="hint">Clover + DoorDash${ddCovered(d)?'':'. DoorDash de este día todavía no está subido.'}</p></div>`;
+}
+function goalRows(from,to,a){
+  const D=state.data,rows=[];
+  for(let k=from;k<=to&&k<=D.today;k=add(k,1)){
+    const meta=metaDe(k);if(!meta)continue;
+    const v=a.days[k].cl+a.days[k].dd;
+    rows.push({k,meta,v,diff:v-meta,hoy:k===D.today,pend:olderPending(k),sinDato:D.cloverOk&&!a.synced[k]&&!olderPending(k),dd:ddCovered(k)});
+  }
+  return rows;
+}
+function goalSum(rows){
+  const cerr=rows.filter(r=>!r.hoy&&!r.pend&&!r.sinDato);
+  return {ok:cerr.filter(r=>r.diff>=0).length,n:cerr.length,meta:rows.reduce((s,r)=>s+r.meta,0),v:rows.reduce((s,r)=>s+r.v,0)};
+}
+const dayShort=k=>DIAS3[parse(k).getUTCDay()]+' '+parse(k).getUTCDate();
+function registryHTML(from,to,a){
+  const rows=goalRows(from,to,a);
+  if(!rows.length)return '<p class="empty">No hay días con meta en este período.</p>';
+  const S=goalSum(rows),acc=S.v-S.meta;
+  const diffCell=r=>r.pend?'<td class="n">…</td>':r.sinDato?'<td class="n hint">sin datos</td>':
+    r.diff>=0?`<td class="n pos">+${money(r.diff)} ✓</td>`:`<td class="n neg">−${money(-r.diff)}${r.hoy?' (hoy)':''}</td>`;
+  return `<p class="gsum"><b>Meta lograda ${S.ok} de ${S.n} ${S.n===1?'día':'días'}</b>${S.n?' ('+Math.round(S.ok/S.n*100)+'%)':''}</p>
+    <p class="hint">A la fecha: ${money0(S.v)} de ${money0(S.meta)} · ${acc>=0?`<span class="pos">${money0(acc)} por encima</span>`:`<span class="neg">faltan ${money0(-acc)}</span>`}</p>
+    <div class="tw"><table class="gt"><thead><tr><th>Día</th><th class="n">Meta</th><th class="n">Vendido</th><th class="n">Diferencia</th></tr></thead><tbody>
+    ${rows.slice().reverse().map(r=>`<tr data-act="openDay" data-d="${r.k}" aria-label="Abrir ${labelDay(r.k)}"><td>${dayShort(r.k)}</td><td class="n">${money0(r.meta)}</td><td class="n">${r.pend||r.sinDato?'—':money(r.v)}</td>${diffCell(r)}</tr>`).join('')}
+    </tbody></table></div>`;
+}
+
 /* ═════════ Actualizar Clover al abrir Día o Mes ═════════ */
 const SYNC_EVERY=60000; // no más de una consulta a Clover por minuto
 function viewingToday(){
@@ -569,6 +643,7 @@ function mountDia(){
   <div class="cols">
     <div class="col-a">
       <div class="seal-wrap">${sealHTML()}<div class="legend" id="legend"></div><div class="stats" id="dstats"></div></div>
+      <div id="dgoal"></div>
       <div id="dnotes" class="stack-gap"></div>
       <section class="block"><div class="block-head"><h2>Últimos 7 días</h2></div><div class="week" id="week"></div></section>
     </div>
@@ -600,6 +675,7 @@ function updateDia(){
   const ord=chOrders(a),tot=cl+dd;
   const partial=useDd()&&a.ddFromItems;
   $('dstats').innerHTML=`<div><span class="k">Órdenes${partial?' (solo Clover)':''}</span><span class="v">${ord}</span></div><div><span class="k">Ticket promedio</span><span class="v">${ord&&!partial?money(tot/ord):'—'}</span></div>`;
+  $('dgoal').innerHTML=goalHTML(d,a);
   const noRow=D.cloverOk&&useCl()&&d<=D.today&&!a.synced[d]&&!olderPending(d);
   $('dnotes').innerHTML=(olderPending(d)?'<p class="note">Cargando meses anteriores…</p>':'')+notesFor(a,'este día').map(t=>`<p class="note">${esc(t)}</p>`).join('')+
     (noRow?'<p class="note">Clover no tiene datos guardados de este día. Ve a Ajustes y toca Actualizar Clover ahora, o usa Traer historial.</p>':'')+
@@ -654,6 +730,7 @@ function mountMes(){
     </div>
     <div class="col-b">
       <section class="block"><div class="block-head"><h2>Ventas por día</h2></div><div class="bars" id="mbars"></div><p class="hint" id="mcap" style="margin-top:10px">Toca una barra para abrir ese día.</p></section>
+      <section class="block"><div class="block-head"><h2>Registro de metas</h2><span class="hint">Clover + DoorDash</span></div><div id="mgoals"></div></section>
       <section class="block">
         <div class="block-head"><h2>Platos más vendidos del mes</h2>
           <div class="toggle" role="group" aria-label="Ordenar platos"><button data-act="sort" data-s="q" aria-pressed="true">Cantidad</button><button data-act="sort" data-s="b" aria-pressed="false">Dinero</button></div></div>
@@ -697,6 +774,7 @@ function updateMes(){
     <div><span class="k">Promedio por día con ventas</span><span class="v">${open.length?money(dayTot/open.length):'—'}</span></div>
     <div><span class="k">Órdenes${partial?' (solo Clover)':''}</span><span class="v">${ord}</span></div>
     <div><span class="k">Ticket promedio</span><span class="v">${ord&&!partial?money(tot/ord):'—'}</span></div>`;
+  $('mgoals').innerHTML=registryHTML(from,to,a);
   $('mnotes').innerHTML=(olderPending(from)?'<p class="note">Cargando meses anteriores…</p>':'')+notesFor(a,'este mes').map(t=>`<p class="note">${esc(t)}</p>`).join('');
   // barras por día
   const mx=Math.max(...days.map(tv),1);
@@ -755,6 +833,10 @@ function buildReport(){
   <tr class="tot"><td>Total</td><td class="n">${ord}</td><td class="n">${money(tot)}</td><td class="n">${ord&&!a.ddFromItems?money(tot/ord):'—'}</td></tr></tbody></table></div>
   <h3>Ventas por día</h3>
   ${days.length?`<div class="tw"><table class="w"><thead><tr><th>Fecha</th><th class="n">Clover</th><th class="n">DoorDash</th><th class="n">Total</th></tr></thead><tbody>${days.map(k=>`<tr><td>${DIAS3[parse(k).getUTCDay()]} ${parse(k).getUTCDate()} ${MESES[parse(k).getUTCMonth()].slice(0,3)}</td><td class="n">${money(a.days[k].cl)}</td><td class="n">${a.days[k].dd?money(a.days[k].dd):'—'}</td><td class="n">${money(a.days[k].cl+a.days[k].dd)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="meta">Sin ventas por día en este período.</p>'}
+  <h3>Registro de metas</h3>
+  ${(()=>{const gr=goalRows(from,to,a);if(!gr.length)return '<p class="meta">Sin días con meta en este período.</p>';const S=goalSum(gr);
+    return `<p class="meta">Meta lograda ${S.ok} de ${S.n} días${S.n?' ('+Math.round(S.ok/S.n*100)+'%)':''} · Vendido ${money(S.v)} de ${money(S.meta)}</p>
+    <div class="tw"><table class="w"><thead><tr><th>Fecha</th><th class="n">Meta</th><th class="n">Vendido</th><th class="n">Diferencia</th><th class="n">Cumplida</th></tr></thead><tbody>${gr.map(r=>`<tr><td>${DIAS3[parse(r.k).getUTCDay()]} ${parse(r.k).getUTCDate()} ${MESES[parse(r.k).getUTCMonth()].slice(0,3)}</td><td class="n">${money(r.meta)}</td><td class="n">${r.sinDato?'sin datos':money(r.v)}</td><td class="n" style="color:${r.diff>=0?'#006666':'#B3402F'};font-weight:700">${r.sinDato?'—':(r.diff>=0?'+':'−')+money(Math.abs(r.diff))}</td><td class="n">${r.sinDato?'—':r.hoy&&r.diff<0?'en curso':r.diff>=0?'Sí':'No'}</td></tr>`).join('')}</tbody></table></div>`;})()}
   <h3>Platos más vendidos</h3>
   ${items.length?`<div class="tw"><table class="w"><thead><tr><th>Plato</th><th class="n">Clover</th><th class="n">DoorDash</th><th class="n">Total</th><th class="n">Ventas</th></tr></thead><tbody>${items.map(x=>`<tr><td>${esc(x.name)}</td><td class="n">${x.cq||'—'}</td><td class="n">${x.dq||'—'}</td><td class="n">${x.q}</td><td class="n">${money(x.b)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="meta">Sin detalle de platos en este período.</p>'}
   <h3>Ventas por vendedor (Clover)</h3>
@@ -768,6 +850,8 @@ function buildReport(){
   L.push([q('Clover'),a.cl.o,a.cl.b.toFixed(2)].join(','));L.push([q('DoorDash'),a.dd.o,a.dd.b.toFixed(2)].join(','));L.push([q('Total'),ord,tot.toFixed(2)].join(','));
   L.push('');L.push(['Fecha','Clover','DoorDash','Total'].map(q).join(','));
   days.forEach(k=>L.push([k,a.days[k].cl.toFixed(2),a.days[k].dd.toFixed(2),(a.days[k].cl+a.days[k].dd).toFixed(2)].join(',')));
+  L.push('');L.push(['Fecha','Meta','Vendido','Diferencia','Cumplida'].map(q).join(','));
+  goalRows(from,to,a).forEach(r=>L.push([r.k,r.meta.toFixed(2),r.v.toFixed(2),r.diff.toFixed(2),q(r.sinDato?'sin datos':r.hoy&&r.diff<0?'en curso':r.diff>=0?'Sí':'No')].join(',')));
   L.push('');L.push(['Plato','Cantidad Clover','Cantidad DoorDash','Cantidad total','Ventas'].map(q).join(','));
   items.forEach(x=>L.push([q(x.name),x.cq,x.dq,x.q,x.b.toFixed(2)].join(',')));
   L.push('');L.push(['Vendedor (Clover)','Órdenes','Ventas brutas','Ticket promedio'].map(q).join(','));
@@ -807,6 +891,10 @@ async function renderAjustes(){
       <p class="hint" style="margin-top:8px">Máximo 31 días por vez.</p>`
       :`<p class="hint">Para conectar Clover agrega estas propiedades en Apps Script (Configuración del proyecto): <code>CLOVER_MERCHANT_ID</code> y <code>CLOVER_TOKEN</code>. El token debe ser de solo lectura.</p>`}
     </section>
+    <section class="block"><div class="block-head"><h2>Metas de venta</h2></div>
+      <p class="hint">Meta diaria de Clover + DoorDash. Deja en 0 los días sin meta. Los cambios aplican desde hoy; los días anteriores conservan su meta.</p>
+      <div class="metas">${[1,2,3,4,5,6,0].map(i=>`<label class="field">${DIAS[i].replace(/^./,c=>c.toUpperCase())}<input type="number" min="0" step="1" inputmode="numeric" id="meta-${i}" value="${Number(metasActuales()[i])||0}"></label>`).join('')}</div>
+      <div class="row" style="margin-top:14px"><button class="btn" data-act="saveMetas">Guardar metas</button></div></section>
     <section class="block"><div class="block-head"><h2>Apariencia</h2></div>
       <div class="toggle" style="grid-template-columns:repeat(3,1fr)" role="group" aria-label="Tema">
         <button data-act="theme" data-t="auto" aria-pressed="${t==='auto'}">Automático</button><button data-act="theme" data-t="light" aria-pressed="${t==='light'}">Claro</button><button data-act="theme" data-t="dark" aria-pressed="${t==='dark'}">Oscuro</button></div></section>
@@ -883,6 +971,14 @@ const actions={
     try{const r=await call('syncRango',state.pin,f,h);reloadOlder();await loadData(true);toast('Historial listo: '+r.dias+' días nuevos');}
     catch(e){toast(errMsg(e));}
     if(state.view==='ajustes')renderAjustes();
+  },
+  async saveMetas(t){
+    const m={};
+    for(let i=0;i<7;i++){const v=$('meta-'+i).value.trim();const n=v===''?0:Number(v);if(!(n>=0)){toast('Revisa las metas: solo números.');return;}m[i]=Math.round(n*100)/100;}
+    t.disabled=true;t.textContent='Guardando…';
+    try{const r=await call('guardarMetas',state.pin,m);state.data.metas=r.metas;toast('Metas guardadas');}
+    catch(e){toast(errMsg(e));}
+    renderAjustes();
   },
   async del(t){
     if(t.dataset.armed!=='1'){t.dataset.armed='1';t.textContent='¿Seguro? Quitar';t.classList.remove('alt');t.classList.add('danger');setTimeout(()=>{if(t.isConnected){t.dataset.armed='';t.textContent='Quitar';t.classList.add('alt');t.classList.remove('danger');}},4000);return;}
@@ -1057,7 +1153,8 @@ const demo=(function(){
   const imports=[{tipo:'ventas',archivo:'SALES_BY_TIME_demo.csv',rIni:periods[0][0],rFin:today,filas:ddVentas.length,importado:''},{tipo:'items',archivo:'PRODUCT_MIX_demo.csv',rIni:periods[0][0],rFin:today,filas:ddItems.length,importado:''}];
   if(location.search.indexOf('nosales')>=0)ddVentas.length=0;
   if(location.search.indexOf('big')>=0)clDias.forEach(r=>{r[2]=+(r[2]*9).toFixed(2);});
-  const data={today,cloverOk:true,lastSync:new Date().toISOString(),clDias,clItems,clEmp,ddVentas,ddItems,equiv};
+  const metas=JSON.parse(JSON.stringify(DEF_METAS));
+  const data={today,cloverOk:true,metas,lastSync:new Date().toISOString(),clDias,clItems,clEmp,ddVentas,ddItems,equiv};
   const recentFrom=(()=>{let y=+today.slice(0,4),m=+today.slice(5,7)-1;if(m<1){m=12;y--;}return y+'-'+String(m).padStart(2,'0')+'-01';})();
   const pack=scope=>{
     const c=JSON.parse(JSON.stringify(data));
@@ -1086,6 +1183,7 @@ const demo=(function(){
     importarDoorDash:()=>({ok:false,msg:'No disponible en la demostración.'}),
     listarImportaciones:()=>imports,
     borrarImportacion:()=>({ok:true}),
+    guardarMetas:(p,m)=>{data.metas=data.metas.filter(x=>x.desde<today).concat([{desde:today,m}]);return {ok:true,metas:data.metas};},
     guardarEquiv:(p,dd,u)=>{data.equiv[dd]=u;return {ok:true};},
     guardarEquivVarios:(p,pares)=>{pares.forEach(([d,u])=>{data.equiv[d]=u;});return {ok:true};}
   };
