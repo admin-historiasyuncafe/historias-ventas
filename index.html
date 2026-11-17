@@ -239,8 +239,10 @@ h1,h2,h3,p{margin:0}
 .tg-foot{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:8px;font-size:13.5px;font-weight:600;color:var(--muted)}
 .tg-foot b{font-size:15.5px;font-weight:800;white-space:nowrap}
 .team .note{margin-top:10px}
-.teamed li{gap:10px}
-.teamed select{max-width:200px;width:auto;font:inherit;font-weight:600;color:var(--ink);background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:42px}
+.picks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.picks .field{min-width:0}
+.picks select{width:100%;min-width:0}
+
 .res.ok{color:var(--cl-ink)} .res.err{color:#B3402F}
 :root[data-theme="dark"] .res.err{color:#FF9B8B}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .res.err{color:#FF9B8B}}
@@ -637,49 +639,40 @@ function splitGoals(meta,nV,nA){
 }
 function teamDay(d){
   const D=state.data,meta=metaDe(d),ros=rosterOf(d);
-  const vend=ros.filter(x=>x.rol==='vendedora'),apo=ros.filter(x=>x.rol==='apoyo');
-  const tgP=ros.filter(x=>x.rol==='togo'),ger=ros.filter(x=>x.rol==='gerencia');
+  const vend=ros.filter(x=>x.rol==='vendedora').slice(0,2),apo=ros.filter(x=>x.rol==='apoyo').slice(0,1);
   const G=splitGoals(meta,vend.length,apo.length);
-  let tgB=null,synced=false,miss=false;
-  D.clDias.forEach(r=>{if(r[0]===d){synced=true;tgB=r[4];if(r[4]==null&&r[2]>0)miss=true;}});
-  // ventas de mesa de cada persona = sus ventas en Clover menos sus órdenes To Go
+  let synced=false,miss=false;
+  D.clDias.forEach(r=>{if(r[0]===d){synced=true;if(r[4]==null&&r[2]>0)miss=true;}});
+  // ventas de cada vendedora = sus ventas en Clover menos sus órdenes To Go
   const sold=new Map();
   D.clEmp.forEach(r=>{if(r[0]!==d)return;const n=canon(r[1]);sold.set(n,(sold.get(n)||0)+r[3]-(r[5]||0));});
   const cards=[];
   if(meta){
-    if(!miss)cards.push({name:'To Go',who:tgP.map(x=>x.p).join(', '),rol:'togo',meta:G.togo,v:tgB||0});
     vend.forEach(x=>cards.push({name:x.p,rol:'vendedora',meta:G.vend,v:sold.get(x.p)||0}));
     apo.forEach(x=>cards.push({name:x.p,rol:'apoyo',meta:G.apoyo,v:sold.get(x.p)||0}));
   }
-  return {meta,ros,cards,ger,miss,synced,G,nV:vend.length,nA:apo.length};
+  return {meta,ros,vend,apo,cards,miss,synced,G,nV:vend.length,nA:apo.length};
 }
+const esFinde=d=>{const w=parse(d).getUTCDay();return w===0||w===6;};
 function tgCardHTML(c,hoy){
   const pct=c.meta?c.v/c.meta*100:0,diff=c.v-c.meta;
   const cls=pct>=100?'ok':hoy?'mid':'low';   // hoy en curso: dorado; día cerrado sin meta: rojo
-  const tag=c.rol==='togo'?(c.who?esc(c.who):''):ROLES[c.rol];
-  const falta=c.rol==='togo'?'Faltan':'Te faltan';
-  return `<div class="tg ${cls}"><div class="tg-top"><span class="tg-name">${esc(c.name)}${tag?` <span class="tg-rol">${tag}</span>`:''}</span><span class="tg-meta">Meta ${money0(c.meta)}</span></div>
+  return `<div class="tg ${cls}"><div class="tg-top"><span class="tg-name">${esc(c.name)}${c.rol==='apoyo'?' <span class="tg-rol">Apoyo</span>':''}</span><span class="tg-meta">Meta ${money0(c.meta)}</span></div>
     <div class="goalbar" role="progressbar" aria-label="Avance de ${esc(c.name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(Math.min(100,pct))}"><i data-w="${Math.min(100,pct).toFixed(1)}%"></i></div>
-    <div class="tg-foot"><span>${money(c.v)} · ${Math.round(pct)}%</span>${diff>=0?`<b class="pos">Meta lograda${diff>=1?' · +'+money0(diff):''}</b>`:`<b class="neg">${hoy?falta:'Faltaron'} ${money0(Math.ceil(-diff))}</b>`}</div></div>`;
+    <div class="tg-foot"><span>${money(c.v)} · ${Math.round(pct)}%</span>${diff>=0?`<b class="pos">Meta lograda${diff>=1?' · +'+money0(diff):''}</b>`:`<b class="neg">${hoy?'Te faltan':'Faltaron'} ${money0(Math.ceil(-diff))}</b>`}</div></div>`;
 }
 function teamHTML(d){
   const D=state.data;
   if(d>D.today||olderPending(d))return '';
   if(state.teamEdit&&state.teamEditDay!==d){state.teamEdit=false;state.teamDraft=null;}
   const T=teamDay(d),hoy=d===D.today;
-  if(state.teamEdit)return teamEditorHTML(d,T);
   if(!T.meta)return '';
-  const head=`<div class="block-head"><h2>Metas del equipo</h2><button class="btn alt" data-act="teamEdit">${T.ros.length?'Editar equipo':'Equipo del día'}</button></div>`;
+  // sin vendedoras guardadas, el selector aparece directo (ya viene con las del último día)
+  if(state.teamEdit||!T.nV)return teamEditorHTML(d,T);
+  const head=`<div class="block-head"><h2>Metas de las vendedoras</h2><button class="btn alt" data-act="teamEdit">Cambiar</button></div>`;
   let body=`<div class="tgs">${T.cards.map(c=>tgCardHTML(c,hoy)).join('')}</div>`;
-  if(!T.ros.length)body+=`<p class="note">Marca quién trabajó ${hoy?'hoy':'este día'} para ver la meta de cada vendedora.</p>`;
-  else{
-    const txt=[];
-    if(T.nV)txt.push(`${T.G.pV}% entre ${T.nV} ${T.nV===1?'vendedora':'vendedoras'}`);
-    if(T.nA)txt.push(`${T.G.pA}% apoyo`);
-    txt.push(`${T.G.pT}% To Go`);
-    body+=`<p class="hint" style="margin-top:10px">${txt.join(' · ')}.${T.ger.length?' Gerencia: '+esc(T.ger.map(x=>x.p).join(', '))+'.':''} Las ventas de cada persona no incluyen sus órdenes To Go.</p>`;
-  }
-  if(T.miss)body+=`<p class="note">Este día se guardó antes de separar To Go, así que no hay meta de To Go y las ventas de cada persona incluyen sus órdenes To Go. En Ajustes, usa Traer historial con esta fecha para recalcularlo.</p>`;
+  body+=`<p class="hint" style="margin-top:10px">Las ventas de cada una no incluyen sus órdenes To Go.</p>`;
+  if(T.miss)body+=`<p class="note">Este día se guardó antes de separar To Go, así que estas ventas incluyen las órdenes To Go. En Ajustes, usa Traer historial con esta fecha para recalcularlo.</p>`;
   return `<section class="block team">${head}${body}</section>`;
 }
 function teamCandidates(d){
@@ -688,49 +681,60 @@ function teamCandidates(d){
   (D.equipo||[]).forEach(r=>{if(r[0]>=from&&r[0]<=d)set.add(r[1]);});
   return [...set].sort((a,b)=>a.localeCompare(b,'es'));
 }
+// el último día guardado antes de d que cumpla la condición
+function lastRoster(d,cond){
+  const L=(state.data.equipo||[]).filter(r=>r[0]<d).map(r=>r[0]).sort();
+  for(let i=L.length-1;i>=0;i--){const k=L[i];if(i<L.length-1&&L[i+1]===k)continue;const ros=rosterOf(k);if(cond(ros,k))return ros;}
+  return [];
+}
 function teamPreview(d){
-  const meta=metaDe(d);if(!meta)return 'Este día no tiene meta.';
-  const v=Object.values(state.teamDraft||{}),nV=v.filter(x=>x==='vendedora').length,nA=v.filter(x=>x==='apoyo').length;
-  const G=splitGoals(meta,nV,nA),parts=[`To Go ${money0(G.togo)}`];
-  if(nV)parts.push(`${nV===1?'la vendedora':'cada vendedora'} ${money0(G.vend)}`);
-  if(nA)parts.push(`apoyo ${money0(G.apoyo)}${nA>1?' cada una':''}`);
-  return `Meta del día ${money0(meta)}. Con este equipo: ${parts.join(' · ')}.`;
+  const meta=metaDe(d),t=state.teamDraft||{};
+  const nV=[t.v1,t.v2].filter(Boolean).length,nA=t.a?1:0;
+  if(!nV)return 'Escoge las vendedoras del día.';
+  if(t.v1&&t.v1===t.v2)return 'Escogiste la misma persona dos veces.';
+  if(t.a&&(t.a===t.v1||t.a===t.v2))return 'La persona de apoyo no puede ser también vendedora.';
+  const G=splitGoals(meta,nV,nA);
+  return `Meta de ${nV===1?'la vendedora':'cada vendedora'}: ${money0(G.vend)}${nA?` · apoyo: ${money0(G.apoyo)}`:''}.`;
 }
 function teamEditorHTML(d,T){
+  const finde=esFinde(d);
   if(!state.teamDraft){
-    const m={};T.ros.forEach(x=>{m[x.p]=x.rol;});
-    // sin equipo guardado: se sugiere como vendedora a quien vendió en mesa ese día
-    if(!T.ros.length)state.data.clEmp.forEach(r=>{if(r[0]===d&&r[1]!=='Sin asignar'&&r[3]-(r[5]||0)>0)m[canon(r[1])]='vendedora';});
-    state.teamDraft=m;
+    let v=T.vend.map(x=>x.p),a=T.apo.length?T.apo[0].p:'';
+    if(!v.length){
+      v=lastRoster(d,ros=>ros.some(x=>x.rol==='vendedora')).filter(x=>x.rol==='vendedora').map(x=>x.p);
+      if(finde)a=(lastRoster(d,(ros,k)=>esFinde(k)&&ros.some(x=>x.rol==='apoyo')).find(x=>x.rol==='apoyo')||{}).p||'';
+    }
+    state.teamDraft={v1:v[0]||'',v2:v[1]||'',a:finde?a:''};
   }
-  const names=teamCandidates(d);Object.keys(state.teamDraft).forEach(n=>{if(!names.includes(n))names.push(n);});
-  const OPTS=[['','No trabajó'],['vendedora','Vendedora'],['apoyo','Apoyo (breaks)'],['togo','To Go'],['gerencia','Gerencia (sin meta)']];
-  const sel=n=>OPTS.map(([v,t])=>`<option value="${v}"${(state.teamDraft[n]||'')===v?' selected':''}>${t}</option>`).join('');
-  return `<section class="block team"><div class="block-head"><h2>Equipo del ${esc(labelDay(d))}</h2></div>
-    ${names.length?`<ul class="list teamed">${names.map(n=>`<li><span class="nm">${esc(n)}</span><select data-chg="teamRole" data-p="${esc(n)}" aria-label="Rol de ${esc(n)}">${sel(n)}</select></li>`).join('')}</ul>`
-      :'<p class="hint">No hay personas con ventas en Clover en los últimos 45 días.</p>'}
+  const t=state.teamDraft,names=teamCandidates(d);
+  [t.v1,t.v2,t.a].forEach(n=>{if(n&&!names.includes(n))names.push(n);});
+  const sel=(k,label,empty)=>`<label class="field">${label}<select data-chg="teamPick" data-k="${k}">
+    <option value="">${empty}</option>${names.map(n=>`<option value="${esc(n)}"${t[k]===n?' selected':''}>${esc(n)}</option>`).join('')}</select></label>`;
+  const guardado=T.nV>0;
+  return `<section class="block team"><div class="block-head"><h2>Vendedoras ${d===state.data.today?'de hoy':'del '+esc(labelDay(d))}</h2></div>
+    <div class="picks">${sel('v1','Vendedora 1','Escoger…')}${sel('v2','Vendedora 2','Escoger…')}${finde?sel('a','Apoyo (breaks)','Nadie'):''}</div>
     <p class="hint" id="teamPrev" style="margin-top:10px">${esc(teamPreview(d))}</p>
-    <div class="row" style="margin-top:12px"><button class="btn" data-act="teamSave">Guardar equipo</button><button class="btn alt" data-act="teamCancel">Cancelar</button></div></section>`;
+    <div class="row" style="margin-top:12px"><button class="btn" data-act="teamSave">Guardar</button>${guardado?'<button class="btn alt" data-act="teamCancel">Cancelar</button>':''}</div></section>`;
 }
 // resumen del período por persona: solo días cerrados con equipo marcado (no cuenta hoy)
 function teamMonthRows(from,to){
   const D=state.data,acc=new Map();
   for(let k=from;k<=to&&k<D.today;k=add(k,1)){
     if(olderPending(k))continue;
-    const T=teamDay(k);if(!T.meta||!T.ros.length||!T.synced||T.miss)continue;
+    const T=teamDay(k);if(!T.meta||!T.nV||!T.synced||T.miss)continue;
     T.cards.forEach(c=>{
       let x=acc.get(c.name);if(!x){x={name:c.name,rol:c.rol,dias:0,ok:0,v:0,meta:0};acc.set(c.name,x);}
       x.dias++;x.v+=c.v;x.meta+=c.meta;if(c.v>=c.meta)x.ok++;
     });
   }
-  return [...acc.values()].sort((a,b)=>(a.rol==='togo')-(b.rol==='togo')||b.ok/b.dias-a.ok/a.dias||b.v-a.v);
+  return [...acc.values()].sort((a,b)=>(a.rol==='apoyo')-(b.rol==='apoyo')||b.ok/b.dias-a.ok/a.dias||b.v-a.v);
 }
 function teamMonthHTML(from,to){
   const rows=teamMonthRows(from,to);
-  if(!rows.length)return '<p class="empty">Todavía no hay días con el equipo marcado en este período.</p>';
+  if(!rows.length)return '<p class="empty">Todavía no hay días con vendedoras escogidas en este período.</p>';
   return `<div class="tw"><table class="gt"><thead><tr><th>Persona</th><th class="n">Días</th><th class="n">Logró la meta</th><th class="n">Vendido</th><th class="n">De su meta</th></tr></thead><tbody>
-    ${rows.map(r=>{const pc=r.meta?Math.round(r.v/r.meta*100):0;return `<tr><td>${esc(r.name)}</td><td class="n">${r.dias}</td><td class="n">${r.ok}</td><td class="n">${money0(r.v)}</td><td class="n ${pc>=100?'pos':'neg'}">${pc}%</td></tr>`;}).join('')}
-    </tbody></table></div><p class="hint" style="margin-top:8px">Solo días con el equipo marcado, sin contar hoy.</p>`;
+    ${rows.map(r=>{const pc=r.meta?Math.round(r.v/r.meta*100):0;return `<tr><td>${esc(r.name)}${r.rol==='apoyo'?' <span class="hint">(apoyo)</span>':''}</td><td class="n">${r.dias}</td><td class="n">${r.ok}</td><td class="n">${money0(r.v)}</td><td class="n ${pc>=100?'pos':'neg'}">${pc}%</td></tr>`;}).join('')}
+    </tbody></table></div><p class="hint" style="margin-top:8px">Solo días con vendedoras escogidas, sin contar hoy.</p>`;
 }
 
 /* ═════════ Actualizar Clover al abrir Día o Mes ═════════ */
@@ -873,7 +877,7 @@ function mountMes(){
     <div class="col-b">
       <section class="block"><div class="block-head"><h2>Ventas por día</h2></div><div class="bars" id="mbars"></div><p class="hint" id="mcap" style="margin-top:10px">Toca una barra para abrir ese día.</p></section>
       <section class="block"><div class="block-head"><h2>Registro de metas</h2><span class="hint">Solo Clover</span></div><div id="mgoals"></div></section>
-      <section class="block"><div class="block-head"><h2>Metas por persona</h2></div><div id="mteam"></div></section>
+      <section class="block"><div class="block-head"><h2>Metas de las vendedoras</h2></div><div id="mteam"></div></section>
       <section class="block">
         <div class="block-head"><h2>Platos más vendidos del mes</h2>
           <div class="toggle" role="group" aria-label="Ordenar platos"><button data-act="sort" data-s="q" aria-pressed="true">Cantidad</button><button data-act="sort" data-s="b" aria-pressed="false">Dinero</button></div></div>
@@ -982,9 +986,9 @@ function buildReport(){
   ${(()=>{const gr=goalRows(from,to,a);if(!gr.length)return '<p class="meta">Sin días con meta en este período.</p>';const S=goalSum(gr);
     return `<p class="meta">Meta lograda ${S.ok} de ${S.n} días${S.n?' ('+Math.round(S.ok/S.n*100)+'%)':''} · Vendido ${money(S.v)} de ${money(S.meta)}</p>
     <div class="tw"><table class="w"><thead><tr><th>Fecha</th><th class="n">Meta</th><th class="n">Vendido</th><th class="n">Diferencia</th><th class="n">Cumplida</th></tr></thead><tbody>${gr.map(r=>`<tr><td>${DIAS3[parse(r.k).getUTCDay()]} ${parse(r.k).getUTCDate()} ${MESES[parse(r.k).getUTCMonth()].slice(0,3)}</td><td class="n">${money(r.meta)}</td><td class="n">${r.sinDato?'sin datos':money(r.v)}</td><td class="n" style="color:${r.diff>=0?'#006666':'#B3402F'};font-weight:700">${r.sinDato?'—':(r.diff>=0?'+':'−')+money(Math.abs(r.diff))}</td><td class="n">${r.sinDato?'—':r.hoy&&r.diff<0?'en curso':r.diff>=0?'Sí':'No'}</td></tr>`).join('')}</tbody></table></div>`;})()}
-  <h3>Metas por persona</h3>
-  ${(()=>{const tr=teamMonthRows(from,to);if(!tr.length)return '<p class="meta">Sin días con el equipo marcado en este período.</p>';
-    return `<div class="tw"><table><thead><tr><th>Persona</th><th class="n">Días</th><th class="n">Logró la meta</th><th class="n">Vendido</th><th class="n">Meta acumulada</th><th class="n">De su meta</th></tr></thead><tbody>${tr.map(r=>`<tr><td>${esc(r.name)}</td><td class="n">${r.dias}</td><td class="n">${r.ok}</td><td class="n">${money(r.v)}</td><td class="n">${money(r.meta)}</td><td class="n">${r.meta?Math.round(r.v/r.meta*100):0}%</td></tr>`).join('')}</tbody></table></div><p class="meta">Solo días cerrados con el equipo marcado. Las ventas de cada persona no incluyen órdenes To Go; To Go suma todas las órdenes To Go.</p>`;})()}
+  <h3>Metas de las vendedoras</h3>
+  ${(()=>{const tr=teamMonthRows(from,to);if(!tr.length)return '<p class="meta">Sin días con vendedoras escogidas en este período.</p>';
+    return `<div class="tw"><table><thead><tr><th>Persona</th><th class="n">Días</th><th class="n">Logró la meta</th><th class="n">Vendido</th><th class="n">Meta acumulada</th><th class="n">De su meta</th></tr></thead><tbody>${tr.map(r=>`<tr><td>${esc(r.name)}${r.rol==='apoyo'?' (apoyo)':''}</td><td class="n">${r.dias}</td><td class="n">${r.ok}</td><td class="n">${money(r.v)}</td><td class="n">${money(r.meta)}</td><td class="n">${r.meta?Math.round(r.v/r.meta*100):0}%</td></tr>`).join('')}</tbody></table></div><p class="meta">Solo días cerrados con vendedoras escogidas. Las ventas de cada una no incluyen sus órdenes To Go.</p>`;})()}
   <h3>Platos más vendidos</h3>
   ${items.length?`<div class="tw"><table class="w"><thead><tr><th>Plato</th><th class="n">Clover</th><th class="n">DoorDash</th><th class="n">Total</th><th class="n">Ventas</th></tr></thead><tbody>${items.map(x=>`<tr><td>${esc(x.name)}</td><td class="n">${x.cq||'—'}</td><td class="n">${x.dq||'—'}</td><td class="n">${x.q}</td><td class="n">${money(x.b)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="meta">Sin detalle de platos en este período.</p>'}
   <h3>Ventas por vendedor (Clover)</h3>
@@ -1042,7 +1046,7 @@ async function renderAjustes(){
       :`<p class="hint">Para conectar Clover agrega estas propiedades en Apps Script (Configuración del proyecto): <code>CLOVER_MERCHANT_ID</code> y <code>CLOVER_TOKEN</code>. El token debe ser de solo lectura.</p>`}
     </section>
     <section class="block"><div class="block-head"><h2>Metas de venta</h2></div>
-      <p class="hint">Meta diaria de ventas en Clover (DoorDash no cuenta). Se reparte así: 10% To Go, 15% para la persona de apoyo si hay una, y el resto entre las vendedoras. Deja en 0 los días sin meta. Los cambios aplican desde hoy; los días anteriores conservan su meta.</p>
+      <p class="hint">Meta diaria de ventas en Clover (DoorDash no cuenta). Se reparte así: 10% queda para To Go (no se muestra), 15% para la persona de apoyo los fines de semana si hay una, y el resto entre las 2 vendedoras. Deja en 0 los días sin meta. Los cambios aplican desde hoy; los días anteriores conservan su meta.</p>
       <div class="metas">${[1,2,3,4,5,6,0].map(i=>`<label class="field">${DIAS[i].replace(/^./,c=>c.toUpperCase())}<input type="number" min="0" step="1" inputmode="numeric" id="meta-${i}" value="${Number(metasActuales()[i])||0}"></label>`).join('')}</div>
       <div class="row" style="margin-top:14px"><button class="btn" data-act="saveMetas">Guardar metas</button></div></section>
     <section class="block"><div class="block-head"><h2>Apariencia</h2></div>
@@ -1096,7 +1100,10 @@ const actions={
   teamEdit(){state.teamEdit=true;state.teamEditDay=state.day;state.teamDraft=null;updateDia();},
   teamCancel(){state.teamEdit=false;state.teamDraft=null;updateDia();},
   async teamSave(t){
-    const d=state.day,lista=Object.entries(state.teamDraft||{}).filter(([p,r])=>r);
+    const d=state.day,x=state.teamDraft||{};
+    const lista=[[x.v1,'vendedora'],[x.v2,'vendedora'],[x.a,'apoyo']].filter(([p])=>p);
+    if(!x.v1&&!x.v2){toast('Escoge las vendedoras del día.');return;}
+    if(new Set(lista.map(([p])=>p)).size!==lista.length){toast('Cada persona puede estar una sola vez.');return;}
     t.disabled=true;t.textContent='Guardando…';
     try{
       await call('guardarEquipo',state.pin,d,lista);
@@ -1105,7 +1112,7 @@ const actions={
     }catch(e){
       const m=errMsg(e);
       if(/PIN_/.test(m)){lockApp(pinMsg(m));return;}
-      toast(m);t.disabled=false;t.textContent='Guardar equipo';return;
+      toast(m);t.disabled=false;t.textContent='Guardar';return;
     }
     updateDia();
   },
@@ -1154,7 +1161,7 @@ const actions={
   }
 };
 const changes={
-  teamRole(t){if(!state.teamDraft)return;state.teamDraft[t.dataset.p]=t.value;const el=$('teamPrev');if(el)el.textContent=teamPreview(state.day);},
+  teamPick(t){if(!state.teamDraft)return;state.teamDraft[t.dataset.k]=t.value;const el=$('teamPrev');if(el)el.textContent=teamPreview(state.day);},
   repMonth(t){if(t.value){state.rep.month=t.value;renderReporte();}},
   repFrom(t){if(t.value){state.rep.from=t.value;renderReporte();}},
   repTo(t){if(t.value){state.rep.to=t.value;renderReporte();}}
@@ -1316,7 +1323,7 @@ const demo=(function(){
     Object.keys(items).forEach(k=>clItems.push([d,k,items[k].q,+items[k].b.toFixed(2)]));
     Object.keys(em).forEach(k=>clEmp.push([d,k,em[k].o,+em[k].b.toFixed(2),viejo?null:em[k].to,viejo?null:+em[k].tb.toFixed(2)]));
     if(i<=40&&!(i===0&&location.search.indexOf('noteam')>=0)){
-      equipo.push([d,'Ana Rivera','vendedora'],[d,'Bea Torres','vendedora'],[d,'Kiara',i%9===4?'gerencia':'togo']);
+      equipo.push([d,'Ana Rivera','vendedora'],[d,'Bea Torres','vendedora']);
       if(wk)equipo.push([d,'Carla Díaz','apoyo']);
     }
     const dn=Math.round((wk?12:7)+rnd()*6);
