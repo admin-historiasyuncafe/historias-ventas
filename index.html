@@ -67,8 +67,8 @@ h1,h2,h3,p{margin:0}
 .ibtn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .ibtn.spin svg{animation:spin .9s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.chan{position:relative;display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px;width:100%;max-width:420px;margin:0 auto}
-.chan::before{content:"";position:absolute;top:4px;bottom:4px;left:4px;width:calc((100% - 8px)/3);border-radius:999px;background:var(--teal);transform:translateX(calc(var(--i,0)*100%));transition:transform .3s cubic-bezier(.3,.9,.3,1)}
+.chan{position:relative;display:grid;grid-template-columns:repeat(2,1fr);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px;width:100%;max-width:420px;margin:0 auto}
+.chan::before{content:"";position:absolute;top:4px;bottom:4px;left:4px;width:calc((100% - 8px)/2);border-radius:999px;background:var(--teal);transform:translateX(calc(var(--i,0)*100%));transition:transform .3s cubic-bezier(.3,.9,.3,1)}
 .chan button{position:relative;z-index:1;padding:8px 6px;font-weight:700;font-size:14px;color:var(--muted);transition:color .2s}
 .chan button[aria-checked="true"]{color:#fff}
 
@@ -225,6 +225,22 @@ h1,h2,h3,p{margin:0}
 .metas{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:12px}
 .metas .field{min-width:0}
 .metas .field input{width:100%;min-width:0}
+.team{margin-top:16px}
+.team .block-head .btn{padding:8px 14px;font-size:14px}
+.tgs{display:grid;gap:10px}
+.tg{padding:12px 14px;border-radius:14px;background:var(--surface2);border:1px solid var(--line)}
+.tg-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px}
+.tg-name{font-weight:800;font-size:15.5px;overflow-wrap:anywhere}
+.tg-rol{display:inline-block;margin-left:4px;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:700;color:var(--muted);background:var(--surface);border:1px solid var(--line);vertical-align:2px}
+.tg-meta{font-size:13.5px;font-weight:700;color:var(--muted);white-space:nowrap}
+.tg .goalbar{height:10px}
+.tg.mid .goalbar i{background:var(--gold)}
+.tg.low .goalbar i{background:var(--red)}
+.tg-foot{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:8px;font-size:13.5px;font-weight:600;color:var(--muted)}
+.tg-foot b{font-size:15.5px;font-weight:800;white-space:nowrap}
+.team .note{margin-top:10px}
+.teamed li{gap:10px}
+.teamed select{max-width:200px;width:auto;font:inherit;font-weight:600;color:var(--ink);background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:42px}
 .res.ok{color:var(--cl-ink)} .res.err{color:#B3402F}
 :root[data-theme="dark"] .res.err{color:#FF9B8B}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .res.err{color:#FF9B8B}}
@@ -313,8 +329,7 @@ details summary{cursor:pointer;font-weight:700;padding:12px 0;font-size:15px}
       </div>
     </div>
     <div class="chan" id="chan" role="radiogroup" aria-label="Canal de venta" style="--i:0">
-      <button role="radio" aria-checked="true" data-ch="all">Todas</button>
-      <button role="radio" aria-checked="false" data-ch="cl">Clover</button>
+      <button role="radio" aria-checked="true" data-ch="cl">Clover</button>
       <button role="radio" aria-checked="false" data-ch="dd">DoorDash</button>
     </div>
   </div>
@@ -388,11 +403,28 @@ const LS={theme:'hyc-ventas-theme'};
 const OLD_KEYS=['hyc-ventas-pin','hyc-ventas-v1','hyc-ventas-pinon']; // versiones anteriores guardaban datos aquí
 const AUTO_LOCK_MS=120000; // se bloquea si la app estuvo fuera de pantalla más de 2 minutos
 const store={get:k=>{try{return localStorage.getItem(k);}catch(e){return null;}},set:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}},del:k=>{try{localStorage.removeItem(k);}catch(e){}}};
-const state={view:'dia',ch:'all',day:null,month:null,sort:'q',maxItems:8,data:null,pin:'',
+const state={view:'dia',ch:'cl',teamEdit:false,teamEditDay:null,teamDraft:null,day:null,month:null,sort:'q',maxItems:8,data:null,pin:'',
   rep:{mode:'mes',month:null,from:null,to:null},imports:null,uploadMsgs:[],busy:false,
   sync:{busy:false,last:0,err:''},olderLoaded:false,loadingOlder:false,olderGen:0};
 const useCl=()=>state.ch!=='dd';
 const useDd=()=>state.ch!=='cl';
+
+/* ═════════ Vendedoras: segundas cuentas ═════════ */
+// En Clover algunas personas tienen una segunda cuenta ("Kiara II"). Se suman a su cuenta principal.
+let CANON=new Map();
+function buildCanon(){
+  CANON=new Map();
+  const D=state.data;if(!D)return;
+  const names=new Set();D.clEmp.forEach(r=>names.add(r[1]));
+  const base=[...names].filter(n=>!/\s+II$/i.test(n));
+  names.forEach(n=>{
+    if(!/\s+II$/i.test(n))return;
+    const b=n.replace(/\s+II$/i,'').trim(),f=norm(b.split(/\s+/)[0]);
+    const m=base.find(x=>x===b)||base.find(x=>norm(x.split(/\s+/)[0])===f);
+    CANON.set(n,m||b);
+  });
+}
+const canon=n=>CANON.get(n)||n;
 
 /* ═════════ Agregación ═════════ */
 function agg(from,to){
@@ -403,7 +435,7 @@ function agg(from,to){
   D.clDias.forEach(([d,o,b])=>{if(d>=from&&d<=to){r.cl.b+=b;r.cl.o+=o;r.days[d].cl+=b;r.synced[d]=true;}});
   const getItem=(key,name)=>{let x=r.items.get(key);if(!x){x={name,cl:{q:0,b:0},dd:{q:0,b:0}};r.items.set(key,x);}return x;};
   D.clItems.forEach(([d,n,q,b])=>{if(d>=from&&d<=to){const x=getItem(norm(n),n);x.name=n;x.cl.q+=q;x.cl.b+=b;}});
-  D.clEmp.forEach(([d,n,o,b])=>{if(d>=from&&d<=to){let x=r.emp.get(n);if(!x){x={name:n,o:0,b:0};r.emp.set(n,x);}x.o+=o;x.b+=b;}});
+  D.clEmp.forEach(([d,n0,o,b])=>{if(d>=from&&d<=to){const n=canon(n0);let x=r.emp.get(n);if(!x){x={name:n,o:0,b:0};r.emp.set(n,x);}x.o+=o;x.b+=b;}});
   D.ddVentas.forEach(([s,e,o,c,b])=>{
     if(s>=from&&e<=to){r.dd.b+=b;r.dd.o+=o;if(s===e)r.days[s].dd+=b;else r.ddUnspread+=b;}
     else if(s<=to&&e>=from){r.ddPendV+=b;}
@@ -554,24 +586,24 @@ function metasActuales(){const t=state.data?state.data.today:'9999-12-31';const 
 function ddCovered(d){
   return (state.data.ddVentas||[]).some(r=>(r[5]||r[0])<=d&&d<=(r[6]||r[1]));
 }
-// la meta es del negocio completo: Clover + DoorDash, sin importar el canal elegido arriba
+// la meta del día es solo de Clover; DoorDash va aparte
 function goalHTML(d,a){
   const D=state.data,meta=metaDe(d);
   if(d>D.today||olderPending(d))return '';
   if(!meta)return `<div class="goal"><div class="goal-top"><span class="k">Meta del día</span><span class="v">—</span></div><p class="hint">Los ${DIAS[parse(d).getUTCDay()]} no tienen meta.</p></div>`;
-  const tot=a.cl.b+a.dd.b,diff=tot-meta,pct=Math.min(100,tot/meta*100),hoy=d===D.today;
+  const tot=a.cl.b,diff=tot-meta,pct=Math.min(100,tot/meta*100),hoy=d===D.today;
   return `<div class="goal"><div class="goal-top"><span class="k">Meta del día</span><span class="v">${money0(meta)}</span></div>
     <div class="goalbar" role="progressbar" aria-label="Avance de la meta" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><i data-w="${pct.toFixed(1)}%"></i></div>
     <p class="sold">${money(tot)} vendido · ${Math.round(tot/meta*100)}% de la meta</p>
     ${diff>=0?`<p class="goal-ok">Meta lograda${diff>0?' · '+money(diff)+' por encima':''}</p>`:`<p class="goal-miss">${hoy?'Faltan':'Faltaron'} ${money(-diff)}</p>`}
-    <p class="hint">Clover + DoorDash${ddCovered(d)?'':'. DoorDash de este día todavía no está subido.'}</p></div>`;
+    <p class="hint">Solo Clover. DoorDash va aparte.</p></div>`;
 }
 function goalRows(from,to,a){
   const D=state.data,rows=[];
   for(let k=from;k<=to&&k<=D.today;k=add(k,1)){
     const meta=metaDe(k);if(!meta)continue;
-    const v=a.days[k].cl+a.days[k].dd;
-    rows.push({k,meta,v,diff:v-meta,hoy:k===D.today,pend:olderPending(k),sinDato:D.cloverOk&&!a.synced[k]&&!olderPending(k),dd:ddCovered(k)});
+    const v=a.days[k].cl;
+    rows.push({k,meta,v,diff:v-meta,hoy:k===D.today,pend:olderPending(k),sinDato:D.cloverOk&&!a.synced[k]&&!olderPending(k)});
   }
   return rows;
 }
@@ -591,6 +623,114 @@ function registryHTML(from,to,a){
     <div class="tw"><table class="gt"><thead><tr><th>Día</th><th class="n">Meta</th><th class="n">Vendido</th><th class="n">Diferencia</th></tr></thead><tbody>
     ${rows.slice().reverse().map(r=>`<tr data-act="openDay" data-d="${r.k}" aria-label="Abrir ${labelDay(r.k)}"><td>${dayShort(r.k)}</td><td class="n">${money0(r.meta)}</td><td class="n">${r.pend||r.sinDato?'—':money(r.v)}</td>${diffCell(r)}</tr>`).join('')}
     </tbody></table></div>`;
+}
+
+/* ═════════ Metas por persona ═════════ */
+// Reparto de la meta del día: 10% To Go, 15% apoyo (solo si alguien está marcado como apoyo)
+// y el resto entre las vendedoras. Cada meta se redondea hacia arriba.
+const ROLES={vendedora:'Vendedora',apoyo:'Apoyo',togo:'To Go',gerencia:'Gerencia'};
+const reparto=()=>(state.data&&state.data.reparto)||{togo:10,apoyo:15};
+const rosterOf=d=>(state.data.equipo||[]).filter(r=>r[0]===d).map(r=>({p:r[1],rol:r[2]}));
+function splitGoals(meta,nV,nA){
+  const rp=reparto(),pA=nA?rp.apoyo:0,pV=100-rp.togo-pA;
+  return {pT:rp.togo,pA,pV,togo:Math.ceil(meta*rp.togo/100),vend:nV?Math.ceil(meta*pV/100/nV):0,apoyo:nA?Math.ceil(meta*pA/100/nA):0};
+}
+function teamDay(d){
+  const D=state.data,meta=metaDe(d),ros=rosterOf(d);
+  const vend=ros.filter(x=>x.rol==='vendedora'),apo=ros.filter(x=>x.rol==='apoyo');
+  const tgP=ros.filter(x=>x.rol==='togo'),ger=ros.filter(x=>x.rol==='gerencia');
+  const G=splitGoals(meta,vend.length,apo.length);
+  let tgB=null,synced=false,miss=false;
+  D.clDias.forEach(r=>{if(r[0]===d){synced=true;tgB=r[4];if(r[4]==null&&r[2]>0)miss=true;}});
+  // ventas de mesa de cada persona = sus ventas en Clover menos sus órdenes To Go
+  const sold=new Map();
+  D.clEmp.forEach(r=>{if(r[0]!==d)return;const n=canon(r[1]);sold.set(n,(sold.get(n)||0)+r[3]-(r[5]||0));});
+  const cards=[];
+  if(meta){
+    if(!miss)cards.push({name:'To Go',who:tgP.map(x=>x.p).join(', '),rol:'togo',meta:G.togo,v:tgB||0});
+    vend.forEach(x=>cards.push({name:x.p,rol:'vendedora',meta:G.vend,v:sold.get(x.p)||0}));
+    apo.forEach(x=>cards.push({name:x.p,rol:'apoyo',meta:G.apoyo,v:sold.get(x.p)||0}));
+  }
+  return {meta,ros,cards,ger,miss,synced,G,nV:vend.length,nA:apo.length};
+}
+function tgCardHTML(c,hoy){
+  const pct=c.meta?c.v/c.meta*100:0,diff=c.v-c.meta;
+  const cls=pct>=100?'ok':hoy?'mid':'low';   // hoy en curso: dorado; día cerrado sin meta: rojo
+  const tag=c.rol==='togo'?(c.who?esc(c.who):''):ROLES[c.rol];
+  const falta=c.rol==='togo'?'Faltan':'Te faltan';
+  return `<div class="tg ${cls}"><div class="tg-top"><span class="tg-name">${esc(c.name)}${tag?` <span class="tg-rol">${tag}</span>`:''}</span><span class="tg-meta">Meta ${money0(c.meta)}</span></div>
+    <div class="goalbar" role="progressbar" aria-label="Avance de ${esc(c.name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(Math.min(100,pct))}"><i data-w="${Math.min(100,pct).toFixed(1)}%"></i></div>
+    <div class="tg-foot"><span>${money(c.v)} · ${Math.round(pct)}%</span>${diff>=0?`<b class="pos">Meta lograda${diff>=1?' · +'+money0(diff):''}</b>`:`<b class="neg">${hoy?falta:'Faltaron'} ${money0(Math.ceil(-diff))}</b>`}</div></div>`;
+}
+function teamHTML(d){
+  const D=state.data;
+  if(d>D.today||olderPending(d))return '';
+  if(state.teamEdit&&state.teamEditDay!==d){state.teamEdit=false;state.teamDraft=null;}
+  const T=teamDay(d),hoy=d===D.today;
+  if(state.teamEdit)return teamEditorHTML(d,T);
+  if(!T.meta)return '';
+  const head=`<div class="block-head"><h2>Metas del equipo</h2><button class="btn alt" data-act="teamEdit">${T.ros.length?'Editar equipo':'Equipo del día'}</button></div>`;
+  let body=`<div class="tgs">${T.cards.map(c=>tgCardHTML(c,hoy)).join('')}</div>`;
+  if(!T.ros.length)body+=`<p class="note">Marca quién trabajó ${hoy?'hoy':'este día'} para ver la meta de cada vendedora.</p>`;
+  else{
+    const txt=[];
+    if(T.nV)txt.push(`${T.G.pV}% entre ${T.nV} ${T.nV===1?'vendedora':'vendedoras'}`);
+    if(T.nA)txt.push(`${T.G.pA}% apoyo`);
+    txt.push(`${T.G.pT}% To Go`);
+    body+=`<p class="hint" style="margin-top:10px">${txt.join(' · ')}.${T.ger.length?' Gerencia: '+esc(T.ger.map(x=>x.p).join(', '))+'.':''} Las ventas de cada persona no incluyen sus órdenes To Go.</p>`;
+  }
+  if(T.miss)body+=`<p class="note">Este día se guardó antes de separar To Go, así que no hay meta de To Go y las ventas de cada persona incluyen sus órdenes To Go. En Ajustes, usa Traer historial con esta fecha para recalcularlo.</p>`;
+  return `<section class="block team">${head}${body}</section>`;
+}
+function teamCandidates(d){
+  const D=state.data,from=add(d,-45),set=new Set();
+  D.clEmp.forEach(r=>{if(r[0]>=from&&r[0]<=d&&r[1]!=='Sin asignar')set.add(canon(r[1]));});
+  (D.equipo||[]).forEach(r=>{if(r[0]>=from&&r[0]<=d)set.add(r[1]);});
+  return [...set].sort((a,b)=>a.localeCompare(b,'es'));
+}
+function teamPreview(d){
+  const meta=metaDe(d);if(!meta)return 'Este día no tiene meta.';
+  const v=Object.values(state.teamDraft||{}),nV=v.filter(x=>x==='vendedora').length,nA=v.filter(x=>x==='apoyo').length;
+  const G=splitGoals(meta,nV,nA),parts=[`To Go ${money0(G.togo)}`];
+  if(nV)parts.push(`${nV===1?'la vendedora':'cada vendedora'} ${money0(G.vend)}`);
+  if(nA)parts.push(`apoyo ${money0(G.apoyo)}${nA>1?' cada una':''}`);
+  return `Meta del día ${money0(meta)}. Con este equipo: ${parts.join(' · ')}.`;
+}
+function teamEditorHTML(d,T){
+  if(!state.teamDraft){
+    const m={};T.ros.forEach(x=>{m[x.p]=x.rol;});
+    // sin equipo guardado: se sugiere como vendedora a quien vendió en mesa ese día
+    if(!T.ros.length)state.data.clEmp.forEach(r=>{if(r[0]===d&&r[1]!=='Sin asignar'&&r[3]-(r[5]||0)>0)m[canon(r[1])]='vendedora';});
+    state.teamDraft=m;
+  }
+  const names=teamCandidates(d);Object.keys(state.teamDraft).forEach(n=>{if(!names.includes(n))names.push(n);});
+  const OPTS=[['','No trabajó'],['vendedora','Vendedora'],['apoyo','Apoyo (breaks)'],['togo','To Go'],['gerencia','Gerencia (sin meta)']];
+  const sel=n=>OPTS.map(([v,t])=>`<option value="${v}"${(state.teamDraft[n]||'')===v?' selected':''}>${t}</option>`).join('');
+  return `<section class="block team"><div class="block-head"><h2>Equipo del ${esc(labelDay(d))}</h2></div>
+    ${names.length?`<ul class="list teamed">${names.map(n=>`<li><span class="nm">${esc(n)}</span><select data-chg="teamRole" data-p="${esc(n)}" aria-label="Rol de ${esc(n)}">${sel(n)}</select></li>`).join('')}</ul>`
+      :'<p class="hint">No hay personas con ventas en Clover en los últimos 45 días.</p>'}
+    <p class="hint" id="teamPrev" style="margin-top:10px">${esc(teamPreview(d))}</p>
+    <div class="row" style="margin-top:12px"><button class="btn" data-act="teamSave">Guardar equipo</button><button class="btn alt" data-act="teamCancel">Cancelar</button></div></section>`;
+}
+// resumen del período por persona: solo días cerrados con equipo marcado (no cuenta hoy)
+function teamMonthRows(from,to){
+  const D=state.data,acc=new Map();
+  for(let k=from;k<=to&&k<D.today;k=add(k,1)){
+    if(olderPending(k))continue;
+    const T=teamDay(k);if(!T.meta||!T.ros.length||!T.synced||T.miss)continue;
+    T.cards.forEach(c=>{
+      let x=acc.get(c.name);if(!x){x={name:c.name,rol:c.rol,dias:0,ok:0,v:0,meta:0};acc.set(c.name,x);}
+      x.dias++;x.v+=c.v;x.meta+=c.meta;if(c.v>=c.meta)x.ok++;
+    });
+  }
+  return [...acc.values()].sort((a,b)=>(a.rol==='togo')-(b.rol==='togo')||b.ok/b.dias-a.ok/a.dias||b.v-a.v);
+}
+function teamMonthHTML(from,to){
+  const rows=teamMonthRows(from,to);
+  if(!rows.length)return '<p class="empty">Todavía no hay días con el equipo marcado en este período.</p>';
+  return `<div class="tw"><table class="gt"><thead><tr><th>Persona</th><th class="n">Días</th><th class="n">Logró la meta</th><th class="n">Vendido</th><th class="n">De su meta</th></tr></thead><tbody>
+    ${rows.map(r=>{const pc=r.meta?Math.round(r.v/r.meta*100):0;return `<tr><td>${esc(r.name)}</td><td class="n">${r.dias}</td><td class="n">${r.ok}</td><td class="n">${money0(r.v)}</td><td class="n ${pc>=100?'pos':'neg'}">${pc}%</td></tr>`;}).join('')}
+    </tbody></table></div><p class="hint" style="margin-top:8px">Solo días con el equipo marcado, sin contar hoy.</p>`;
 }
 
 /* ═════════ Actualizar Clover al abrir Día o Mes ═════════ */
@@ -644,6 +784,7 @@ function mountDia(){
     <div class="col-a">
       <div class="seal-wrap">${sealHTML()}<div class="legend" id="legend"></div><div class="stats" id="dstats"></div></div>
       <div id="dgoal"></div>
+      <div id="dteam"></div>
       <div id="dnotes" class="stack-gap"></div>
       <section class="block"><div class="block-head"><h2>Últimos 7 días</h2></div><div class="week" id="week"></div></section>
     </div>
@@ -676,6 +817,7 @@ function updateDia(){
   const partial=useDd()&&a.ddFromItems;
   $('dstats').innerHTML=`<div><span class="k">Órdenes${partial?' (solo Clover)':''}</span><span class="v">${ord}</span></div><div><span class="k">Ticket promedio</span><span class="v">${ord&&!partial?money(tot/ord):'—'}</span></div>`;
   $('dgoal').innerHTML=goalHTML(d,a);
+  $('dteam').innerHTML=teamHTML(d);
   const noRow=D.cloverOk&&useCl()&&d<=D.today&&!a.synced[d]&&!olderPending(d);
   $('dnotes').innerHTML=(olderPending(d)?'<p class="note">Cargando meses anteriores…</p>':'')+notesFor(a,'este día').map(t=>`<p class="note">${esc(t)}</p>`).join('')+
     (noRow?'<p class="note">Clover no tiene datos guardados de este día. Ve a Ajustes y toca Actualizar Clover ahora, o usa Traer historial.</p>':'')+
@@ -705,7 +847,7 @@ function updateDia(){
   $('demps').innerHTML=eh;
   const ee=$('dempsEmpty');
   if(!eh){ee.hidden=false;ee.textContent='Sin ventas de Clover este día.';}else ee.hidden=true;
-  if(state.ch==='dd'){$('demps').innerHTML='';ee.hidden=false;ee.textContent='DoorDash no registra vendedor. Cambia a Todas o Clover para verlos.';}
+  if(state.ch==='dd'){$('demps').innerHTML='';ee.hidden=false;ee.textContent='DoorDash no registra vendedor. Cambia a Clover para verlos.';}
   syncSortButtons();
   growBars($('v-dia'));
   renderSyncLine();maybeSync();
@@ -730,7 +872,8 @@ function mountMes(){
     </div>
     <div class="col-b">
       <section class="block"><div class="block-head"><h2>Ventas por día</h2></div><div class="bars" id="mbars"></div><p class="hint" id="mcap" style="margin-top:10px">Toca una barra para abrir ese día.</p></section>
-      <section class="block"><div class="block-head"><h2>Registro de metas</h2><span class="hint">Clover + DoorDash</span></div><div id="mgoals"></div></section>
+      <section class="block"><div class="block-head"><h2>Registro de metas</h2><span class="hint">Solo Clover</span></div><div id="mgoals"></div></section>
+      <section class="block"><div class="block-head"><h2>Metas por persona</h2></div><div id="mteam"></div></section>
       <section class="block">
         <div class="block-head"><h2>Platos más vendidos del mes</h2>
           <div class="toggle" role="group" aria-label="Ordenar platos"><button data-act="sort" data-s="q" aria-pressed="true">Cantidad</button><button data-act="sort" data-s="b" aria-pressed="false">Dinero</button></div></div>
@@ -775,6 +918,7 @@ function updateMes(){
     <div><span class="k">Órdenes${partial?' (solo Clover)':''}</span><span class="v">${ord}</span></div>
     <div><span class="k">Ticket promedio</span><span class="v">${ord&&!partial?money(tot/ord):'—'}</span></div>`;
   $('mgoals').innerHTML=registryHTML(from,to,a);
+  $('mteam').innerHTML=teamMonthHTML(from,to);
   $('mnotes').innerHTML=(olderPending(from)?'<p class="note">Cargando meses anteriores…</p>':'')+notesFor(a,'este mes').map(t=>`<p class="note">${esc(t)}</p>`).join('');
   // barras por día
   const mx=Math.max(...days.map(tv),1);
@@ -797,7 +941,7 @@ function updateMes(){
   if(rows.length>10){mb.hidden=false;mb.textContent=state.maxItems>8?'Ver menos':'Ver los '+Math.min(rows.length,25);}else mb.hidden=true;
   const eh=empHTML(a);$('memps').innerHTML=eh;
   const ee=$('mempsEmpty');
-  if(state.ch==='dd'){$('memps').innerHTML='';ee.hidden=false;ee.textContent='DoorDash no registra vendedor. Cambia a Todas o Clover para verlos.';}
+  if(state.ch==='dd'){$('memps').innerHTML='';ee.hidden=false;ee.textContent='DoorDash no registra vendedor. Cambia a Clover para verlos.';}
   else if(!eh){ee.hidden=false;ee.textContent='Sin ventas de Clover este mes.';}else ee.hidden=true;
   syncSortButtons();
   growBars($('v-mes'));
@@ -830,13 +974,17 @@ function buildReport(){
   <div class="tw"><table><thead><tr><th>Canal</th><th class="n">Órdenes</th><th class="n">Ventas brutas</th><th class="n">Ticket promedio</th></tr></thead><tbody>
   <tr><td>Clover</td><td class="n">${a.cl.o}</td><td class="n">${money(a.cl.b)}</td><td class="n">${a.cl.o?money(a.cl.b/a.cl.o):'—'}</td></tr>
   <tr><td>DoorDash</td><td class="n">${a.dd.o}</td><td class="n">${money(a.dd.b)}</td><td class="n">${a.dd.o?money(a.dd.b/a.dd.o):'—'}</td></tr>
-  <tr class="tot"><td>Total</td><td class="n">${ord}</td><td class="n">${money(tot)}</td><td class="n">${ord&&!a.ddFromItems?money(tot/ord):'—'}</td></tr></tbody></table></div>
+</tbody></table></div>
+  <p class="meta">Clover y DoorDash se reportan por separado. La meta de ventas es solo de Clover.</p>
   <h3>Ventas por día</h3>
-  ${days.length?`<div class="tw"><table class="w"><thead><tr><th>Fecha</th><th class="n">Clover</th><th class="n">DoorDash</th><th class="n">Total</th></tr></thead><tbody>${days.map(k=>`<tr><td>${DIAS3[parse(k).getUTCDay()]} ${parse(k).getUTCDate()} ${MESES[parse(k).getUTCMonth()].slice(0,3)}</td><td class="n">${money(a.days[k].cl)}</td><td class="n">${a.days[k].dd?money(a.days[k].dd):'—'}</td><td class="n">${money(a.days[k].cl+a.days[k].dd)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="meta">Sin ventas por día en este período.</p>'}
+  ${days.length?`<div class="tw"><table class="w"><thead><tr><th>Fecha</th><th class="n">Clover</th><th class="n">DoorDash</th></tr></thead><tbody>${days.map(k=>`<tr><td>${DIAS3[parse(k).getUTCDay()]} ${parse(k).getUTCDate()} ${MESES[parse(k).getUTCMonth()].slice(0,3)}</td><td class="n">${money(a.days[k].cl)}</td><td class="n">${a.days[k].dd?money(a.days[k].dd):'—'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="meta">Sin ventas por día en este período.</p>'}
   <h3>Registro de metas</h3>
   ${(()=>{const gr=goalRows(from,to,a);if(!gr.length)return '<p class="meta">Sin días con meta en este período.</p>';const S=goalSum(gr);
     return `<p class="meta">Meta lograda ${S.ok} de ${S.n} días${S.n?' ('+Math.round(S.ok/S.n*100)+'%)':''} · Vendido ${money(S.v)} de ${money(S.meta)}</p>
     <div class="tw"><table class="w"><thead><tr><th>Fecha</th><th class="n">Meta</th><th class="n">Vendido</th><th class="n">Diferencia</th><th class="n">Cumplida</th></tr></thead><tbody>${gr.map(r=>`<tr><td>${DIAS3[parse(r.k).getUTCDay()]} ${parse(r.k).getUTCDate()} ${MESES[parse(r.k).getUTCMonth()].slice(0,3)}</td><td class="n">${money(r.meta)}</td><td class="n">${r.sinDato?'sin datos':money(r.v)}</td><td class="n" style="color:${r.diff>=0?'#006666':'#B3402F'};font-weight:700">${r.sinDato?'—':(r.diff>=0?'+':'−')+money(Math.abs(r.diff))}</td><td class="n">${r.sinDato?'—':r.hoy&&r.diff<0?'en curso':r.diff>=0?'Sí':'No'}</td></tr>`).join('')}</tbody></table></div>`;})()}
+  <h3>Metas por persona</h3>
+  ${(()=>{const tr=teamMonthRows(from,to);if(!tr.length)return '<p class="meta">Sin días con el equipo marcado en este período.</p>';
+    return `<div class="tw"><table><thead><tr><th>Persona</th><th class="n">Días</th><th class="n">Logró la meta</th><th class="n">Vendido</th><th class="n">Meta acumulada</th><th class="n">De su meta</th></tr></thead><tbody>${tr.map(r=>`<tr><td>${esc(r.name)}</td><td class="n">${r.dias}</td><td class="n">${r.ok}</td><td class="n">${money(r.v)}</td><td class="n">${money(r.meta)}</td><td class="n">${r.meta?Math.round(r.v/r.meta*100):0}%</td></tr>`).join('')}</tbody></table></div><p class="meta">Solo días cerrados con el equipo marcado. Las ventas de cada persona no incluyen órdenes To Go; To Go suma todas las órdenes To Go.</p>`;})()}
   <h3>Platos más vendidos</h3>
   ${items.length?`<div class="tw"><table class="w"><thead><tr><th>Plato</th><th class="n">Clover</th><th class="n">DoorDash</th><th class="n">Total</th><th class="n">Ventas</th></tr></thead><tbody>${items.map(x=>`<tr><td>${esc(x.name)}</td><td class="n">${x.cq||'—'}</td><td class="n">${x.dq||'—'}</td><td class="n">${x.q}</td><td class="n">${money(x.b)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="meta">Sin detalle de platos en este período.</p>'}
   <h3>Ventas por vendedor (Clover)</h3>
@@ -847,11 +995,13 @@ function buildReport(){
   const L=[];
   L.push([q('Reporte de ventas'),q(label)].join(','));
   L.push('');L.push(['Canal','Órdenes','Ventas brutas'].map(q).join(','));
-  L.push([q('Clover'),a.cl.o,a.cl.b.toFixed(2)].join(','));L.push([q('DoorDash'),a.dd.o,a.dd.b.toFixed(2)].join(','));L.push([q('Total'),ord,tot.toFixed(2)].join(','));
-  L.push('');L.push(['Fecha','Clover','DoorDash','Total'].map(q).join(','));
-  days.forEach(k=>L.push([k,a.days[k].cl.toFixed(2),a.days[k].dd.toFixed(2),(a.days[k].cl+a.days[k].dd).toFixed(2)].join(',')));
+  L.push([q('Clover'),a.cl.o,a.cl.b.toFixed(2)].join(','));L.push([q('DoorDash'),a.dd.o,a.dd.b.toFixed(2)].join(','));
+  L.push('');L.push(['Fecha','Clover','DoorDash'].map(q).join(','));
+  days.forEach(k=>L.push([k,a.days[k].cl.toFixed(2),a.days[k].dd.toFixed(2)].join(',')));
   L.push('');L.push(['Fecha','Meta','Vendido','Diferencia','Cumplida'].map(q).join(','));
   goalRows(from,to,a).forEach(r=>L.push([r.k,r.meta.toFixed(2),r.v.toFixed(2),r.diff.toFixed(2),q(r.sinDato?'sin datos':r.hoy&&r.diff<0?'en curso':r.diff>=0?'Sí':'No')].join(',')));
+  L.push('');L.push(['Persona','Días','Logró la meta','Vendido','Meta acumulada','De su meta %'].map(q).join(','));
+  teamMonthRows(from,to).forEach(r=>L.push([q(r.name),r.dias,r.ok,r.v.toFixed(2),r.meta.toFixed(2),r.meta?Math.round(r.v/r.meta*100):0].join(',')));
   L.push('');L.push(['Plato','Cantidad Clover','Cantidad DoorDash','Cantidad total','Ventas'].map(q).join(','));
   items.forEach(x=>L.push([q(x.name),x.cq,x.dq,x.q,x.b.toFixed(2)].join(',')));
   L.push('');L.push(['Vendedor (Clover)','Órdenes','Ventas brutas','Ticket promedio'].map(q).join(','));
@@ -870,7 +1020,7 @@ function renderReporte(){
         :`<label class="field">Desde<input type="date" id="repFrom" value="${r.from}" max="${D.today}" data-chg="repFrom"></label><label class="field">Hasta<input type="date" id="repTo" value="${r.to}" max="${D.today}" data-chg="repTo"></label>`}
     </div>
     <div class="row" style="margin-top:14px"><button class="btn" data-act="print">Guardar como PDF</button><button class="btn alt" data-act="csv">Descargar CSV</button></div>
-    <p class="hint" style="margin-top:10px">El reporte incluye Clover y DoorDash, sin importar el canal elegido arriba. En el teléfono, usa Compartir y luego Guardar en Archivos.</p></div>
+    <p class="hint" style="margin-top:10px">El reporte incluye Clover y DoorDash por separado, sin sumarlos. En el teléfono, usa Compartir y luego Guardar en Archivos.</p></div>
   </div>${rep.html}</section>`;
 }
 
@@ -892,7 +1042,7 @@ async function renderAjustes(){
       :`<p class="hint">Para conectar Clover agrega estas propiedades en Apps Script (Configuración del proyecto): <code>CLOVER_MERCHANT_ID</code> y <code>CLOVER_TOKEN</code>. El token debe ser de solo lectura.</p>`}
     </section>
     <section class="block"><div class="block-head"><h2>Metas de venta</h2></div>
-      <p class="hint">Meta diaria de Clover + DoorDash. Deja en 0 los días sin meta. Los cambios aplican desde hoy; los días anteriores conservan su meta.</p>
+      <p class="hint">Meta diaria de ventas en Clover (DoorDash no cuenta). Se reparte así: 10% To Go, 15% para la persona de apoyo si hay una, y el resto entre las vendedoras. Deja en 0 los días sin meta. Los cambios aplican desde hoy; los días anteriores conservan su meta.</p>
       <div class="metas">${[1,2,3,4,5,6,0].map(i=>`<label class="field">${DIAS[i].replace(/^./,c=>c.toUpperCase())}<input type="number" min="0" step="1" inputmode="numeric" id="meta-${i}" value="${Number(metasActuales()[i])||0}"></label>`).join('')}</div>
       <div class="row" style="margin-top:14px"><button class="btn" data-act="saveMetas">Guardar metas</button></div></section>
     <section class="block"><div class="block-head"><h2>Apariencia</h2></div>
@@ -933,7 +1083,7 @@ function refresh(){
 }
 function setChannel(ch){
   state.ch=ch;
-  const i={all:0,cl:1,dd:2}[ch];
+  const i={cl:0,dd:1}[ch]||0;
   $('chan').style.setProperty('--i',i);
   document.querySelectorAll('#chan button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.ch===ch)));
   refresh();
@@ -943,6 +1093,22 @@ function errMsg(e){const m=String((e&&e.message)||e||'Error');return m.replace(/
 
 const actions={
   resync(){syncToday(true);},
+  teamEdit(){state.teamEdit=true;state.teamEditDay=state.day;state.teamDraft=null;updateDia();},
+  teamCancel(){state.teamEdit=false;state.teamDraft=null;updateDia();},
+  async teamSave(t){
+    const d=state.day,lista=Object.entries(state.teamDraft||{}).filter(([p,r])=>r);
+    t.disabled=true;t.textContent='Guardando…';
+    try{
+      await call('guardarEquipo',state.pin,d,lista);
+      state.data.equipo=(state.data.equipo||[]).filter(r=>r[0]!==d).concat(lista.map(([p,r])=>[d,p,r]));
+      state.teamEdit=false;state.teamDraft=null;toast('Equipo guardado');
+    }catch(e){
+      const m=errMsg(e);
+      if(/PIN_/.test(m)){lockApp(pinMsg(m));return;}
+      toast(m);t.disabled=false;t.textContent='Guardar equipo';return;
+    }
+    updateDia();
+  },
   prev(){state.day=add(state.day,-1);updateDia();},
   next(){if(state.day<state.data.today){state.day=add(state.day,1);updateDia();}},
   mprev(){state.month=addMonths(state.month,-1);updateMes();},
@@ -988,6 +1154,7 @@ const actions={
   }
 };
 const changes={
+  teamRole(t){if(!state.teamDraft)return;state.teamDraft[t.dataset.p]=t.value;const el=$('teamPrev');if(el)el.textContent=teamPreview(state.day);},
   repMonth(t){if(t.value){state.rep.month=t.value;renderReporte();}},
   repFrom(t){if(t.value){state.rep.from=t.value;renderReporte();}},
   repTo(t){if(t.value){state.rep.to=t.value;renderReporte();}}
@@ -1039,6 +1206,7 @@ function applyTheme(){
 /* ═════════ Carga de datos ═════════ */
 function initState(){
   const D=state.data;
+  buildCanon();
   if(!state.day||state.day>D.today)state.day=D.today;
   if(!state.month)state.month=monthKey(D.today);
 }
@@ -1063,7 +1231,7 @@ async function loadOlder(){
     else if(state.data&&state.pin===pin){
       const D=state.data;
       D.clDias=od.clDias.concat(D.clDias);D.clItems=od.clItems.concat(D.clItems);D.clEmp=od.clEmp.concat(D.clEmp);
-      state.olderLoaded=true;refresh();
+      state.olderLoaded=true;buildCanon();refresh();
     }
   }catch(e){/* se reintenta en la próxima actualización */}
   finally{state.loadingOlder=false;}
@@ -1097,6 +1265,7 @@ function showLock(msg){
 }
 // Borra el PIN y los datos de la memoria y vuelve a pedir el PIN
 function lockApp(msg){
+  state.teamEdit=false;state.teamDraft=null;
   state.pin='';state.data=null;state.imports=null;state.uploadMsgs=[];state.olderLoaded=false;state.loadingOlder=false;state.olderGen++;
   state.sync={busy:false,last:0,err:''};
   $('main').innerHTML='';
@@ -1122,24 +1291,34 @@ const demo=(function(){
   let seed=11;const rnd=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
   const today=fmt(new Date(Date.now()-4*3600000));
   const menu=[['Latte 12oz',3.99,14],['Café Latte 8oz',3.30,11],['Chicken Waffle',18,6],['Blueberries Lemon Pancakes',14,8],['Avocado Ranch Chicken Wrap',13,6],['Desayuno completo',12,7],['Tostadas de aguacate',18,5],['Joe\'s Burger',19,4],['Waffle Sandwich',19,4],['Romerito',12,6],['Tostadas francesas',14,6],['Chai latte 12oz',4.90,5],['Croissant almendrado',4.50,6],['Jugo natural 16oz',5,4],['Mimosa',8,3]];
-  const emps=['Vendedora A','Vendedora B','Vendedora C'];
+  const emps=['Ana Rivera','Bea Torres','Carla Díaz'];
   const wsum=menu.reduce((s,m)=>s+m[2],0);
   const pick=()=>{let r=rnd()*wsum;for(const m of menu){r-=m[2];if(r<=0)return m;}return menu[0];};
-  const clDias=[],clItems=[],clEmp=[],ddVentas=[];
+  const clDias=[],clItems=[],clEmp=[],ddVentas=[],equipo=[];
   for(let i=125;i>=0;i--){
     const d=add(today,-i),dw=parse(d).getUTCDay();
-    if(dw===1){clDias.push([d,0,0]);continue;}
+    if(dw===1){clDias.push([d,0,0,0,0]);continue;}
     const wk=dw===0||dw===6;
     const n=Math.round((wk?105:68)+rnd()*28*(i===0?.4:1)*(i===0?.5:1));
-    const items={},em={};let tot=0;
+    const items={},em={};let tot=0,to=0,tb=0;
+    const piso=wk?emps:emps.slice(0,2);
     for(let k=0;k<n;k++){
       const lines=1+Math.floor(rnd()*3);let ob=0;
       for(let l=0;l<lines;l++){const m=pick();const it=items[m[0]]||(items[m[0]]={q:0,b:0});it.q++;it.b+=m[1];ob+=m[1];}
-      const e=emps[Math.floor(rnd()*3)];const x=em[e]||(em[e]={o:0,b:0});x.o++;x.b+=ob;tot+=ob;
+      const tg=rnd()<.14;
+      let e=tg&&rnd()<.75?'Kiara':piso[Math.floor(rnd()*piso.length)];
+      if(e==='Bea Torres'&&rnd()<.15)e='Bea II';   // segunda cuenta: se suma a Bea Torres
+      const x=em[e]||(em[e]={o:0,b:0,to:0,tb:0});x.o++;x.b+=ob;tot+=ob;
+      if(tg){x.to++;x.tb+=ob;to++;tb+=ob;}
     }
-    clDias.push([d,n,+tot.toFixed(2)]);
+    const viejo=i>90;   // días guardados antes de separar To Go
+    clDias.push([d,n,+tot.toFixed(2),viejo?null:to,viejo?null:+tb.toFixed(2)]);
     Object.keys(items).forEach(k=>clItems.push([d,k,items[k].q,+items[k].b.toFixed(2)]));
-    Object.keys(em).forEach(k=>clEmp.push([d,k,em[k].o,+em[k].b.toFixed(2)]));
+    Object.keys(em).forEach(k=>clEmp.push([d,k,em[k].o,+em[k].b.toFixed(2),viejo?null:em[k].to,viejo?null:+em[k].tb.toFixed(2)]));
+    if(i<=40&&!(i===0&&location.search.indexOf('noteam')>=0)){
+      equipo.push([d,'Ana Rivera','vendedora'],[d,'Bea Torres','vendedora'],[d,'Kiara',i%9===4?'gerencia':'togo']);
+      if(wk)equipo.push([d,'Carla Díaz','apoyo']);
+    }
     const dn=Math.round((wk?12:7)+rnd()*6);
     ddVentas.push([d,d,dn,0,+(dn*(24+rnd()*10)).toFixed(2)]);
   }
@@ -1154,7 +1333,7 @@ const demo=(function(){
   if(location.search.indexOf('nosales')>=0)ddVentas.length=0;
   if(location.search.indexOf('big')>=0)clDias.forEach(r=>{r[2]=+(r[2]*9).toFixed(2);});
   const metas=JSON.parse(JSON.stringify(DEF_METAS));
-  const data={today,cloverOk:true,metas,lastSync:new Date().toISOString(),clDias,clItems,clEmp,ddVentas,ddItems,equiv};
+  const data={today,cloverOk:true,metas,lastSync:new Date().toISOString(),clDias,clItems,clEmp,ddVentas,ddItems,equiv,equipo,reparto:{togo:10,apoyo:15}};
   const recentFrom=(()=>{let y=+today.slice(0,4),m=+today.slice(5,7)-1;if(m<1){m=12;y--;}return y+'-'+String(m).padStart(2,'0')+'-01';})();
   const pack=scope=>{
     const c=JSON.parse(JSON.stringify(data));
@@ -1175,7 +1354,7 @@ const demo=(function(){
       let n=0;
       for(let d=f;d<=t;d=add(d,1)){
         if(data.clDias.some(r=>r[0]===d))continue;
-        data.clDias.push([d,40,800]);data.clItems.push([d,'Latte 12oz',20,80]);data.clEmp.push([d,'Vendedora A',40,800]);n++;
+        data.clDias.push([d,40,800,5,90]);data.clItems.push([d,'Latte 12oz',20,80]);data.clEmp.push([d,'Ana Rivera',40,800,5,90]);n++;
       }
       [data.clDias,data.clItems,data.clEmp].forEach(a=>a.sort((x,y)=>x[0]<y[0]?-1:x[0]>y[0]?1:0));
       return {ok:true,dias:n};
@@ -1183,6 +1362,7 @@ const demo=(function(){
     importarDoorDash:()=>({ok:false,msg:'No disponible en la demostración.'}),
     listarImportaciones:()=>imports,
     borrarImportacion:()=>({ok:true}),
+    guardarEquipo:(p,d,lista)=>{data.equipo=data.equipo.filter(r=>r[0]!==d).concat(lista.map(([n,r])=>[d,n,r]));return {ok:true};},
     guardarMetas:(p,m)=>{data.metas=data.metas.filter(x=>x.desde<today).concat([{desde:today,m}]);return {ok:true,metas:data.metas};},
     guardarEquiv:(p,dd,u)=>{data.equiv[dd]=u;return {ok:true};},
     guardarEquivVarios:(p,pares)=>{pares.forEach(([d,u])=>{data.equiv[d]=u;});return {ok:true};}
@@ -1195,7 +1375,7 @@ async function boot(){
   OLD_KEYS.forEach(k=>store.del(k)); // limpia PIN y datos que dejaron versiones anteriores
   applyTheme();
   if(!HAS_GAS)$('demoBar').hidden=false;
-  setChannel('all');
+  setChannel('cl');
   document.querySelectorAll('.nav button').forEach(b=>{if(b.dataset.view==='dia')b.setAttribute('aria-current','page');});
   state.view='dia';
   lockApp('');

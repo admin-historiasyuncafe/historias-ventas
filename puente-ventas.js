@@ -14,7 +14,7 @@
   if (window.google && window.google.script && window.google.script.run) return;
 
   var FUNCIONES = ['needsPin', 'getData', 'syncHoy', 'syncNow', 'syncRango', 'importarDoorDash',
-    'listarImportaciones', 'borrarImportacion', 'guardarEquiv', 'guardarEquivVarios', 'guardarMetas'];
+    'listarImportaciones', 'borrarImportacion', 'guardarEquiv', 'guardarEquivVarios', 'guardarMetas', 'guardarEquipo'];
 
   function llamar(fn, args) {
     if (API_URL.indexOf('PEGA_AQUI') === 0) {

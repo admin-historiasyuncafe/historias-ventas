@@ -19,7 +19,8 @@ function API_FUNCIONES_() {
     borrarImportacion: borrarImportacion,
     guardarEquiv: guardarEquiv,
     guardarEquivVarios: guardarEquivVarios,
-    guardarMetas: guardarMetas
+    guardarMetas: guardarMetas,
+    guardarEquipo: guardarEquipo
   };
 }
 
